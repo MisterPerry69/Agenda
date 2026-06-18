@@ -1,0 +1,62 @@
+:root{ --paper:#f7f1e3; --ink:#2e2616; --muted:#a8946e; --line:#d8c9a8;
+  --work:#cfe0f2; --home:#dde9cd; --free:#f3e0c8; --fun:#f1d6e4; }
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body{ margin:0; font-family:'Kalam',cursive,sans-serif; background:var(--paper); color:var(--ink); }
+.hidden{ display:none !important; }
+
+.cover{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg,#6b4631,#4a2f20); color:#e8dcc8; cursor:pointer; }
+.cover-placeholder{ text-align:center; font-size:30px; border:2px dashed rgba(255,255,255,.3);
+  padding:40px 30px; border-radius:14px; }
+
+.app{ min-height:100vh; padding:14px 16px 90px;
+  background-image:repeating-linear-gradient(transparent 0 33px, var(--line) 33px 34px);
+  background-position:0 70px; }
+.ag-head{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.ag-title{ flex:1; text-align:center; font-size:22px; font-weight:700; }
+.nav-btn{ background:none; border:none; font-size:24px; color:var(--muted); }
+.view-switch{ width:100%; display:flex; gap:6px; justify-content:center; margin-top:6px; }
+.vbtn{ font-family:inherit; border:1px solid var(--line); background:transparent; border-radius:14px;
+  padding:4px 12px; font-size:12px; color:var(--muted); }
+.vbtn.active{ background:var(--ink); color:var(--paper); }
+
+.ag-body{ min-height:50vh; }
+.ag-line{ display:grid; grid-template-columns:46px 1fr 70px; gap:8px; align-items:center;
+  padding:9px 0; border-bottom:1px solid transparent; }
+.ag-time{ font-size:13px; font-weight:700; color:var(--muted); }
+.ag-txt{ font-size:19px; line-height:1.1; }
+.ag-gdot{ display:inline-block; width:11px; height:11px; border-radius:50%; margin-left:6px;
+  background:linear-gradient(135deg,#4285f4,#34a853); vertical-align:middle; }
+.ag-tag{ font-family:Arial,sans-serif; font-size:8px; font-weight:700; text-transform:uppercase;
+  text-align:center; padding:3px 0; border-radius:10px; }
+.tag-lavoro{ background:var(--work); } .tag-casa{ background:var(--home); }
+.tag-libero{ background:var(--free); } .tag-cazzeggio{ background:var(--fun); }
+.ag-empty{ text-align:center; color:var(--muted); padding:50px 0; }
+
+.add-fab{ position:fixed; right:20px; bottom:24px; width:54px; height:54px; border-radius:50%;
+  border:none; background:var(--ink); color:var(--paper); font-size:26px; }
+
+.editor{ position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:flex-end; }
+.editor-card{ background:var(--paper); width:100%; border-radius:18px 18px 0 0; padding:20px; }
+.ed-input{ width:100%; font-family:inherit; font-size:18px; padding:10px; margin-bottom:10px;
+  border:1px solid var(--line); border-radius:10px; background:transparent; }
+.ed-cats{ display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+.ed-cat{ font-family:Arial,sans-serif; font-size:11px; padding:6px 12px; border-radius:14px;
+  border:1px solid var(--line); }
+.ed-cat.sel{ outline:2px solid var(--ink); }
+.ed-google{ display:flex; gap:8px; align-items:center; font-family:Arial,sans-serif; font-size:13px; margin-bottom:14px; }
+.ed-actions{ display:flex; gap:10px; justify-content:flex-end; }
+.ed-actions button{ font-family:inherit; font-size:15px; padding:8px 18px; border-radius:10px; border:1px solid var(--line); background:transparent; }
+#ed-save{ background:var(--ink); color:var(--paper); border:none; }
+
+/* viste settimana / mese */
+.wk-block{ margin-bottom:14px; }
+.wk-day{ font-weight:700; font-size:16px; border-bottom:1px solid var(--line); margin-bottom:4px; }
+.wk-item{ font-size:16px; padding:3px 0 3px 8px; }
+.mo-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.mo-h{ font-family:Arial,sans-serif; font-size:10px; text-align:center; color:var(--muted); }
+.mo-cell{ min-height:46px; border:1px solid var(--line); border-radius:8px; padding:3px; }
+.mo-empty{ border:none; }
+.mo-num{ font-family:Arial,sans-serif; font-size:11px; color:var(--muted); }
+.mo-dots{ display:flex; flex-wrap:wrap; gap:2px; margin-top:2px; }
+.mo-dot{ width:7px; height:7px; border-radius:50%; }

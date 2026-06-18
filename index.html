@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>BrainDump</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#4a2f20">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <!-- COVER PLACEHOLDER: la grafica definitiva la realizza l'utente -->
+  <div id="cover" class="cover" onclick="openAgenda()">
+    <div class="cover-placeholder">BrainDump<br><small>(cover placeholder — tap per aprire)</small></div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <header class="ag-head">
+      <button id="nav-prev" class="nav-btn">‹</button>
+      <div id="ag-title" class="ag-title">—</div>
+      <button id="nav-next" class="nav-btn">›</button>
+      <div class="view-switch">
+        <button data-view="day"  class="vbtn active">Giorno</button>
+        <button data-view="week" class="vbtn">Settimana</button>
+        <button data-view="month" class="vbtn">Mese</button>
+      </div>
+    </header>
+    <main id="ag-body" class="ag-body"></main>
+    <button id="add-fab" class="add-fab" onclick="openEditor()">＋</button>
+  </div>
+
+  <!-- EDITOR VOCE -->
+  <div id="editor" class="editor hidden">
+    <div class="editor-card">
+      <input id="ed-title" class="ed-input" placeholder="Cosa?">
+      <input id="ed-time" class="ed-input" type="time">
+      <div id="ed-cats" class="ed-cats"></div>
+      <label class="ed-google"><input id="ed-google" type="checkbox"> Metti su Google Calendar</label>
+      <div class="ed-actions">
+        <button id="ed-delete" class="hidden" onclick="deleteCurrent()">Elimina</button>
+        <button onclick="closeEditor()">Annulla</button>
+        <button id="ed-save" onclick="saveEntry()">Salva</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
