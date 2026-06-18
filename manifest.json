@@ -1,6 +1,6 @@
 {
-  "name": "BrainDump",
-  "short_name": "BrainDump",
+  "name": "QuestLog",
+  "short_name": "QuestLog",
   "description": "La mia agenda di carta",
   "display": "standalone",
   "orientation": "portrait",

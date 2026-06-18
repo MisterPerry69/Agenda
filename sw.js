@@ -1,10 +1,10 @@
-// Service worker BrainDump.
+// Service worker QuestLog.
 // Strategia: cache dell'APP-SHELL (HTML/CSS/JS/icone) per installabilità e
 // avvio veloce/offline del guscio. I DATI dell'agenda NON sono mai messi in
 // cache (scelta di progetto: app sempre online; le chiamate al Web App GAS
 // passano sempre dalla rete).
 
-var CACHE = 'braindump-shell-v1';
+var CACHE = 'questlog-shell-v2';
 var SHELL = [
   './',
   './index.html',

@@ -1,62 +1,245 @@
-:root{ --paper:#f7f1e3; --ink:#2e2616; --muted:#a8946e; --line:#d8c9a8;
-  --work:#cfe0f2; --home:#dde9cd; --free:#f3e0c8; --fun:#f1d6e4; }
+/* ============================================================
+   QuestLog — "Tome of Days"
+   Pergamena invecchiata · inchiostro seppia · oro brunito (il falò).
+   Display: Cinzel (capitali lapidarie). Corpo: Crimson Pro (serif da libro).
+   ============================================================ */
+
+:root{
+  /* pergamena */
+  --paper:        #ece0c4;
+  --paper-2:      #e3d4b2;
+  --paper-edge:   #d8c39a;
+  /* inchiostro */
+  --ink:          #241c0e;
+  --ink-soft:     #4a3d26;
+  --ink-faint:    #7d6a48;
+  /* oro / falò */
+  --gold:         #b08d3c;
+  --gold-bright:  #d8b25a;
+  --gold-deep:    #7c6320;
+  /* sigilli categoria (smorzati, da manoscritto) */
+  --work:  #5a6f86;   /* acciaio */
+  --home:  #5f7a4a;   /* muschio */
+  --free:  #a9683a;   /* rame */
+  --fun:   #8a4f6d;   /* prugna */
+  --rule:  rgba(124,99,32,.22);
+  --line-h: 40px;     /* passo delle righe della pergamena */
+}
+
 *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-body{ margin:0; font-family:'Kalam',cursive,sans-serif; background:var(--paper); color:var(--ink); }
+html,body{ height:100%; }
+body{
+  margin:0; overflow-x:hidden;
+  font-family:'Crimson Pro', Georgia, serif;
+  color:var(--ink);
+  background:var(--paper);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
 .hidden{ display:none !important; }
 
-.cover{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-  background:linear-gradient(135deg,#6b4631,#4a2f20); color:#e8dcc8; cursor:pointer; }
-.cover-placeholder{ text-align:center; font-size:30px; border:2px dashed rgba(255,255,255,.3);
-  padding:40px 30px; border-radius:14px; }
+/* grana/pergamena riusabile come overlay */
+@keyframes flicker { 0%,100%{ opacity:.55 } 50%{ opacity:.78 } }
+@keyframes riseIn { from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+@keyframes emberGlow {
+  0%,100%{ box-shadow:0 0 18px 2px rgba(176,141,60,.20), inset 0 0 22px rgba(176,141,60,.10); }
+  50%    { box-shadow:0 0 30px 5px rgba(216,178,90,.38), inset 0 0 26px rgba(176,141,60,.18); }
+}
 
-.app{ min-height:100vh; padding:14px 16px 90px;
-  background-image:repeating-linear-gradient(transparent 0 33px, var(--line) 33px 34px);
-  background-position:0 70px; }
-.ag-head{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
-.ag-title{ flex:1; text-align:center; font-size:22px; font-weight:700; }
-.nav-btn{ background:none; border:none; font-size:24px; color:var(--muted); }
-.view-switch{ width:100%; display:flex; gap:6px; justify-content:center; margin-top:6px; }
-.vbtn{ font-family:inherit; border:1px solid var(--line); background:transparent; border-radius:14px;
-  padding:4px 12px; font-size:12px; color:var(--muted); }
-.vbtn.active{ background:var(--ink); color:var(--paper); }
+/* ===================== COVER (tomo) ===================== */
+.cover{
+  position:fixed; inset:0; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  background:
+    radial-gradient(120% 80% at 50% 18%, #3a2a18 0%, #241809 55%, #160f06 100%);
+  overflow:hidden;
+}
+/* grana scura sul cuoio */
+.cover::before{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  mix-blend-mode:overlay;
+}
+/* elastico/fermaglio del journal sul lato destro */
+.cover::after{
+  content:""; position:absolute; top:0; bottom:0; right:34px; width:10px;
+  background:linear-gradient(90deg,#1a1206,#43331c 45%,#2a1d0c);
+  box-shadow:-3px 0 8px rgba(0,0,0,.45), inset 1px 0 0 rgba(216,178,90,.18);
+}
+.cover-placeholder{
+  position:relative; z-index:1; text-align:center;
+  font-family:'Cinzel', serif; font-weight:700; letter-spacing:.10em;
+  font-size:clamp(30px,8.5vw,46px); color:var(--gold-bright);
+  padding:48px 38px; border:1px solid rgba(216,178,90,.45);
+  border-radius:6px; text-shadow:0 1px 0 #000, 0 0 24px rgba(216,178,90,.35);
+  background:radial-gradient(120% 120% at 50% 0%, rgba(176,141,60,.10), transparent 70%);
+  animation:emberGlow 4.5s ease-in-out infinite;
+}
+.cover-placeholder small{
+  display:block; margin-top:14px; font-family:'Crimson Pro',serif; font-weight:400;
+  font-style:italic; letter-spacing:.02em; font-size:14px; color:rgba(216,178,90,.6);
+  text-shadow:none;
+}
 
-.ag-body{ min-height:50vh; }
-.ag-line{ display:grid; grid-template-columns:46px 1fr 70px; gap:8px; align-items:center;
-  padding:9px 0; border-bottom:1px solid transparent; }
-.ag-time{ font-size:13px; font-weight:700; color:var(--muted); }
-.ag-txt{ font-size:19px; line-height:1.1; }
-.ag-gdot{ display:inline-block; width:11px; height:11px; border-radius:50%; margin-left:6px;
-  background:linear-gradient(135deg,#4285f4,#34a853); vertical-align:middle; }
-.ag-tag{ font-family:Arial,sans-serif; font-size:8px; font-weight:700; text-transform:uppercase;
-  text-align:center; padding:3px 0; border-radius:10px; }
-.tag-lavoro{ background:var(--work); } .tag-casa{ background:var(--home); }
-.tag-libero{ background:var(--free); } .tag-cazzeggio{ background:var(--fun); }
-.ag-empty{ text-align:center; color:var(--muted); padding:50px 0; }
+/* ===================== PAGINA AGENDA ===================== */
+.app{
+  position:relative; min-height:100vh; padding:26px 16px 110px; isolation:isolate;
+  background:
+    /* vignettatura calda ai bordi */
+    radial-gradient(140% 100% at 50% -10%, rgba(255,247,225,.55), transparent 60%),
+    linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+}
+/* grana fine sulla pergamena */
+.app::before{
+  content:""; position:absolute; inset:0; z-index:-1; pointer-events:none; opacity:.06;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
 
-.add-fab{ position:fixed; right:20px; bottom:24px; width:54px; height:54px; border-radius:50%;
-  border:none; background:var(--ink); color:var(--paper); font-size:26px; }
+/* intestazione */
+.ag-head{ position:relative; display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+.ag-title{
+  flex:1; text-align:center; font-family:'Cinzel',serif; font-weight:600;
+  font-size:clamp(20px,6vw,27px); letter-spacing:.04em; color:var(--ink);
+}
+.nav-btn{
+  background:none; border:none; cursor:pointer; line-height:1;
+  font-family:'Cinzel',serif; font-size:30px; color:var(--gold-deep);
+  width:40px; height:40px; transition:color .18s, transform .18s;
+}
+.nav-btn:active{ transform:scale(.86); color:var(--gold); }
 
-.editor{ position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:flex-end; }
-.editor-card{ background:var(--paper); width:100%; border-radius:18px 18px 0 0; padding:20px; }
-.ed-input{ width:100%; font-family:inherit; font-size:18px; padding:10px; margin-bottom:10px;
-  border:1px solid var(--line); border-radius:10px; background:transparent; }
-.ed-cats{ display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
-.ed-cat{ font-family:Arial,sans-serif; font-size:11px; padding:6px 12px; border-radius:14px;
-  border:1px solid var(--line); }
-.ed-cat.sel{ outline:2px solid var(--ink); }
-.ed-google{ display:flex; gap:8px; align-items:center; font-family:Arial,sans-serif; font-size:13px; margin-bottom:14px; }
-.ed-actions{ display:flex; gap:10px; justify-content:flex-end; }
-.ed-actions button{ font-family:inherit; font-size:15px; padding:8px 18px; border-radius:10px; border:1px solid var(--line); background:transparent; }
-#ed-save{ background:var(--ink); color:var(--paper); border:none; }
+/* selettore viste: capitelli incisi, con sottolineatura dorata sull'attivo */
+.view-switch{ width:100%; display:flex; gap:4px; justify-content:center; margin-top:4px;
+  border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:8px 0; }
+.vbtn{
+  font-family:'Cinzel',serif; font-weight:500; letter-spacing:.12em; text-transform:uppercase;
+  border:none; background:transparent; cursor:pointer; color:var(--ink-faint);
+  font-size:11px; padding:6px 14px; position:relative; transition:color .2s;
+}
+.vbtn::after{ content:""; position:absolute; left:50%; right:50%; bottom:0; height:2px;
+  background:var(--gold); transition:left .22s ease, right .22s ease; }
+.vbtn.active{ color:var(--ink); }
+.vbtn.active::after{ left:14px; right:14px; }
 
-/* viste settimana / mese */
-.wk-block{ margin-bottom:14px; }
-.wk-day{ font-weight:700; font-size:16px; border-bottom:1px solid var(--line); margin-bottom:4px; }
-.wk-item{ font-size:16px; padding:3px 0 3px 8px; }
-.mo-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
-.mo-h{ font-family:Arial,sans-serif; font-size:10px; text-align:center; color:var(--muted); }
-.mo-cell{ min-height:46px; border:1px solid var(--line); border-radius:8px; padding:3px; }
-.mo-empty{ border:none; }
-.mo-num{ font-family:Arial,sans-serif; font-size:11px; color:var(--muted); }
-.mo-dots{ display:flex; flex-wrap:wrap; gap:2px; margin-top:2px; }
-.mo-dot{ width:7px; height:7px; border-radius:50%; }
+/* ===================== VISTA GIORNO (le "quest") ===================== */
+.ag-body{ min-height:50vh; border-top:1px solid var(--rule); }
+
+.ag-line{
+  display:grid; grid-template-columns:48px minmax(0,1fr) auto; gap:10px; align-items:center;
+  padding:12px 4px 10px; min-height:48px;
+  position:relative; cursor:pointer;
+  /* la riga della pergamena È il bordo inferiore → sempre allineata al testo */
+  border-bottom:1px solid var(--rule);
+  transition:background .18s;
+  animation:riseIn .4s ease both;
+}
+.ag-line:hover{ background:rgba(176,141,60,.07); }
+.ag-line:active{ background:rgba(176,141,60,.14); }
+/* fregio dorato a inizio voce */
+.ag-line::before{
+  content:""; position:absolute; left:-2px; top:50%; width:3px; height:0;
+  background:linear-gradient(var(--gold-bright),var(--gold-deep)); border-radius:2px;
+  transform:translateY(-50%); transition:height .2s ease;
+}
+.ag-line:hover::before{ height:64%; }
+
+.ag-time{
+  font-family:'Cinzel',serif; font-weight:600; font-size:14px; letter-spacing:.02em;
+  color:var(--gold-deep); text-align:right; white-space:nowrap;
+}
+.ag-txt{
+  font-family:'Crimson Pro',serif; font-size:21px; font-weight:500; line-height:1.2; color:var(--ink);
+  min-width:0; overflow:hidden; text-overflow:ellipsis;
+}
+.ag-gdot{
+  display:inline-block; width:9px; height:9px; border-radius:50%; margin-left:8px;
+  background:radial-gradient(circle at 35% 30%, var(--gold-bright), var(--gold-deep));
+  box-shadow:0 0 7px rgba(216,178,90,.7); vertical-align:middle;
+}
+
+/* sigilli categoria — non pillole pastello ma timbri sobri */
+.ag-tag{
+  font-family:'Cinzel',serif; font-size:8.5px; font-weight:600; letter-spacing:.08em;
+  text-transform:uppercase; text-align:center; color:#fff; white-space:nowrap;
+  padding:4px 9px; border-radius:3px; align-self:center;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.12), 0 1px 1px rgba(0,0,0,.12);
+}
+.tag-lavoro{ background:var(--work); }
+.tag-casa{   background:var(--home); }
+.tag-libero{ background:var(--free); }
+.tag-cazzeggio{ background:var(--fun); }
+
+.ag-empty{
+  text-align:center; color:var(--ink-faint); padding:64px 20px; font-style:italic;
+  font-size:18px; line-height:1.5;
+}
+
+/* ===================== FAB (il falò) ===================== */
+.add-fab{
+  position:fixed; right:22px; bottom:26px; width:60px; height:60px; border-radius:50%;
+  border:1px solid var(--gold-deep); cursor:pointer; z-index:5;
+  background:radial-gradient(circle at 38% 30%, var(--gold-bright), var(--gold) 55%, var(--gold-deep));
+  color:#2a1d05; font-family:'Cinzel',serif; font-weight:700; font-size:30px; line-height:1;
+  box-shadow:0 6px 16px rgba(40,25,5,.4); animation:emberGlow 4s ease-in-out infinite;
+  transition:transform .15s;
+}
+.add-fab:active{ transform:scale(.9) rotate(90deg); }
+
+/* ===================== EDITOR (cartiglio) ===================== */
+.editor{ position:fixed; inset:0; z-index:10; display:flex; align-items:flex-end;
+  background:rgba(22,15,6,.55); backdrop-filter:blur(2px); animation:riseIn .2s ease; }
+.editor-card{
+  width:100%; padding:24px 22px calc(24px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  border-radius:18px 18px 0 0; border-top:2px solid var(--gold);
+  box-shadow:0 -10px 30px rgba(0,0,0,.35); animation:riseIn .28s ease;
+}
+.ed-input{
+  width:100%; font-family:'Crimson Pro',serif; font-size:19px; color:var(--ink);
+  padding:11px 4px; margin-bottom:12px; background:transparent; border:none;
+  border-bottom:1px solid var(--paper-edge); transition:border-color .2s;
+}
+.ed-input:focus{ outline:none; border-bottom-color:var(--gold); }
+#ed-title{ font-family:'Cinzel',serif; font-size:20px; letter-spacing:.02em; }
+.ed-cats{ display:flex; gap:8px; margin:6px 0 16px; flex-wrap:wrap; }
+.ed-cat{
+  font-family:'Cinzel',serif; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  padding:7px 14px; border-radius:4px; cursor:pointer; color:var(--ink-soft);
+  background:transparent; border:1px solid var(--paper-edge); transition:all .16s;
+}
+.ed-cat.sel{ color:#2a1d05; background:var(--gold); border-color:var(--gold-deep); font-weight:600; }
+.ed-google{ display:flex; gap:9px; align-items:center; font-family:'Crimson Pro',serif;
+  font-size:15px; color:var(--ink-soft); margin-bottom:18px; cursor:pointer; }
+.ed-google input{ width:18px; height:18px; accent-color:var(--gold); }
+.ed-actions{ display:flex; gap:10px; justify-content:flex-end; align-items:center; }
+.ed-actions button{
+  font-family:'Cinzel',serif; font-size:13px; letter-spacing:.06em; cursor:pointer;
+  padding:10px 20px; border-radius:5px; border:1px solid var(--paper-edge);
+  background:transparent; color:var(--ink-soft); transition:all .16s;
+}
+.ed-actions button:active{ transform:translateY(1px); }
+#ed-delete{ margin-right:auto; border-color:transparent; color:#9c4a3a; }
+#ed-save{ background:var(--gold); border-color:var(--gold-deep); color:#2a1d05; font-weight:600; }
+
+/* ===================== VISTA SETTIMANA ===================== */
+.wk-block{ margin-bottom:18px; animation:riseIn .4s ease both; }
+.wk-day{
+  font-family:'Cinzel',serif; font-weight:600; font-size:15px; letter-spacing:.06em;
+  color:var(--gold-deep); border-bottom:1px solid var(--rule); padding-bottom:4px; margin-bottom:6px;
+  cursor:pointer;
+}
+.wk-item{ font-family:'Crimson Pro',serif; font-size:18px; padding:4px 0 4px 14px;
+  position:relative; }
+.wk-item::before{ content:"·"; position:absolute; left:2px; color:var(--gold); font-weight:700; }
+
+/* ===================== VISTA MESE ===================== */
+.mo-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:6px; }
+.mo-h{ font-family:'Cinzel',serif; font-size:10px; letter-spacing:.05em; text-align:center;
+  color:var(--ink-faint); padding-bottom:4px; }
+.mo-cell{ min-height:52px; border:1px solid var(--rule); border-radius:6px; padding:4px;
+  background:rgba(255,250,235,.25); cursor:pointer; transition:background .15s, border-color .15s; }
+.mo-cell:active{ background:rgba(176,141,60,.12); border-color:var(--gold); }
+.mo-empty{ border:none; background:none; }
+.mo-num{ font-family:'Cinzel',serif; font-size:11px; color:var(--ink-soft); }
+.mo-dots{ display:flex; flex-wrap:wrap; gap:3px; margin-top:3px; }
+.mo-dot{ width:7px; height:7px; border-radius:50%; box-shadow:inset 0 0 0 1px rgba(0,0,0,.15); }
