@@ -132,7 +132,7 @@ body{
 /* figlio di .app: ancorato a left:0 del viewport, sbordando dal bordo sx della pagina.
    stretto e alto, come una linguetta che esce dal quaderno. */
 .note-btn{
-  position:absolute; left:0; bottom:120px; width:34px; height:72px; z-index:6;
+  position:absolute; left:5px; bottom:120px; width:34px; height:72px; z-index:6;
   background:var(--postit, var(--hl-pink)); border:0; cursor:pointer;
   border-radius:0 7px 7px 0; box-shadow:none; padding:0;
 }
@@ -294,7 +294,7 @@ body{
 /* ===================== BOOKMARK (apre tracking) ===================== */
 /* figlio di .app: ancorato a top:0 del viewport → sborda verso l'alto oltre il bordo della pagina */
 .bookmark{
-  position:absolute; top:0; right:28px; width:38px; height:62px; z-index:7; border:none; cursor:pointer;
+  position:absolute; top:8px; right:28px; width:38px; height:62px; z-index:7; border:none; cursor:pointer;
   background:var(--red); color:#fff; font-size:17px; padding:0;
   clip-path:polygon(0 0,100% 0,100% 100%,50% 80%,0 100%);
   box-shadow:1px 2px 4px rgba(0,0,0,.35);
