@@ -4,7 +4,7 @@
 // cache (scelta di progetto: app sempre online; le chiamate al Web App GAS
 // passano sempre dalla rete).
 
-var CACHE = 'questlog-shell-v3';
+var CACHE = 'questlog-shell-v4';
 var SHELL = [
   './',
   './index.html',

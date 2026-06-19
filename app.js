@@ -1,6 +1,6 @@
 // ====== CONFIG ======
 // URL del Web App di Apps Script (deve finire con /exec). Vedi README per il deploy.
-var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyfK9M2FA9oI-iCyUyCKg5aJZu6bK1V5lz5YcyQ3CoAXmksEGBXN3Wqm8kRMEMONvio/exec';
+var SCRIPT_URL = 'INCOLLA_QUI_URL_WEBAPP_EXEC';
 
 var CATS = ['lavoro','casa','libero','cazzeggio'];
 var POSTIT_COLORS = ['#ff93cf','#fff04d','#84d2ff','#a7ef5e','#ffb27a'];
@@ -10,13 +10,17 @@ var state = { view:'day', anchor:_todayISO(), editing:null, selCat:'lavoro' };
 // ====== CACHE LOCALE (fruizione immediata) ======
 // Tutte le voci stanno in cache; le viste leggono da qui (istantanee).
 // La cache si popola dietro la cover e si riallinea col backend in background.
-var cache = { entries: [], loadedAt: 0 };
+// `pending`: id di voci con una scrittura non ancora confermata dal server.
+// Il sync NON deve mai cancellarle (altrimenti "inserisco e ricaricando sparisce").
+var cache = { entries: [], pending: [], loadedAt: 0 };
 function _loadCache(){
-  try{ var c = JSON.parse(localStorage.getItem('ql_cache')||'null'); if(c&&c.entries) cache=c; }catch(e){}
+  try{ var c = JSON.parse(localStorage.getItem('ql_cache')||'null'); if(c&&c.entries){ cache=c; if(!cache.pending) cache.pending=[]; } }catch(e){}
 }
 function _saveCache(){ try{ localStorage.setItem('ql_cache', JSON.stringify(cache)); }catch(e){} }
+function _markPending(id){ if(cache.pending.indexOf(id)<0) cache.pending.push(id); }
+function _clearPending(id){ cache.pending = cache.pending.filter(function(x){ return x!==id; }); }
 function _entriesIn(from,to){
-  return cache.entries.filter(function(e){ return e.date>=from && e.date<=to; })
+  return cache.entries.filter(function(e){ return !e._deleted && e.date>=from && e.date<=to; })
     .sort(function(a,b){ return (a.date+a.time)<(b.date+b.time)?-1:1; });
 }
 function _upsert(entry){
@@ -24,7 +28,7 @@ function _upsert(entry){
   if(i>=0) cache.entries[i]=entry; else cache.entries.push(entry);
   _saveCache();
 }
-function _removeLocal(id){ cache.entries = cache.entries.filter(function(e){ return e.id!==id; }); _saveCache(); }
+function _removeLocal(id){ cache.entries = cache.entries.filter(function(e){ return e.id!==id; }); _clearPending(id); _saveCache(); }
 
 // ====== API (fetch al backend GAS) ======
 function apiGet(params){
@@ -57,8 +61,13 @@ function boot(){
 function syncRange(from,to){
   apiGet({ action:'getAgenda', from:from, to:to })
     .then(function(rows){
-      // sostituisce le voci dell'intervallo con quelle fresche dal server
-      cache.entries = cache.entries.filter(function(e){ return e.date<from || e.date>to; }).concat(rows||[]);
+      // rimpiazza le voci dell'intervallo con quelle del server,
+      // MA conserva quelle ancora "pending" (scrittura non confermata).
+      var keep = cache.entries.filter(function(e){
+        if(cache.pending.indexOf(e.id)>=0) return true;        // pending: non toccare
+        return e.date<from || e.date>to;                        // fuori intervallo: resta
+      });
+      cache.entries = keep.concat(rows||[]);
       cache.loadedAt = Date.now(); _saveCache();
       render();
     })
@@ -78,7 +87,11 @@ function _titleFor(){
   var p=state.anchor.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
   if(state.view==='day') return '<span>'+d.getDate()+' '+MESI[d.getMonth()].toUpperCase()+'</span><span class="dow">'+GIORNI[d.getDay()]+'</span>';
   if(state.view==='month') return '<span>'+MESI[d.getMonth()].toUpperCase()+'</span><span class="dow">'+d.getFullYear()+'</span>';
-  return '<span>SETTIMANA</span><span class="dow">'+MESI[d.getMonth()]+'</span>';
+  // settimana: "SETT. 15 - 21 giu" (range reale)
+  var r=_rangeFor('week',state.anchor); var s=r.from.split('-'), e=r.to.split('-');
+  var sd=new Date(+s[0],+s[1]-1,+s[2]), ed=new Date(+e[0],+e[1]-1,+e[2]);
+  var mlab = sd.getMonth()===ed.getMonth() ? MESI[ed.getMonth()] : MESI[sd.getMonth()].slice(0,3)+'/'+MESI[ed.getMonth()].slice(0,3);
+  return '<span>SETT. '+sd.getDate()+'–'+ed.getDate()+'</span><span class="dow">'+mlab+'</span>';
 }
 function _esc(s){ return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
 
@@ -117,15 +130,29 @@ function renderDay(rows){
 function _byDay(rows){ var m={}; rows.forEach(function(e){ (m[e.date]=m[e.date]||[]).push(e); }); return m; }
 
 function renderWeek(rows){
-  var body=document.getElementById('ag-body'); body.ondblclick=function(ev){ if(!ev.target.closest('.wk-block')) openEditor(); };
-  var map=_byDay(rows), keys=Object.keys(map).sort(); var G=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
-  if(!keys.length){ body.innerHTML='<div class="ag-empty">Settimana vuota.<br>Doppio tap per aggiungere.</div>'; return; }
-  body.innerHTML = keys.map(function(k){
-    var p=k.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
-    var head='<div class="wk-day" onclick="goDay(\''+k+'\')">'+G[d.getDay()]+' '+d.getDate()+'</div>';
-    var items=map[k].map(function(e){ return '<div class="wk-item">'+e.time+' '+_esc(e.title)+(e.onGoogle?' 📌':'')+'</div>'; }).join('');
-    return '<div class="wk-block">'+head+items+'</div>';
-  }).join('');
+  var body=document.getElementById('ag-body'); body.ondblclick=null;
+  var map=_byDay(rows); var G=['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+  var today=_todayISO();
+  // tutti e 7 i giorni della settimana, preimpostati (anche vuoti), uno sotto l'altro
+  var r=_rangeFor('week',state.anchor); var s=r.from.split('-');
+  var start=new Date(+s[0],+s[1]-1,+s[2]);
+  var html='';
+  for(var i=0;i<7;i++){
+    var d=new Date(start); d.setDate(start.getDate()+i); var k=_fmt(d);
+    var items=(map[k]||[]).map(function(e){
+      return '<div class="wk-item tag-'+e.category+(e.done?' done':'')+'" data-id="'+e.id+'"><span class="wk-t">'+e.time+'</span> '+_esc(e.title)+(e.onGoogle?' 📌':'')+'</div>';
+    }).join('') || '<div class="wk-empty">—</div>';
+    html+='<div class="wk-block'+(k===today?' today':'')+'"><div class="wk-day" onclick="goDay(\''+k+'\')">'+G[i]+' '+d.getDate()+'</div>'+items+'</div>';
+  }
+  body.innerHTML=html;
+  // doppio tap su un giorno della settimana = nuovo evento in quel giorno
+  Array.prototype.forEach.call(body.querySelectorAll('.wk-block'), function(blk){
+    blk.addEventListener('dblclick', function(){ /* apre editor sul giorno del blocco */ });
+  });
+  // tap su una voce esistente = modifica
+  Array.prototype.forEach.call(body.querySelectorAll('.wk-item[data-id]'), function(it){
+    it.addEventListener('click', function(){ openEditor(it.getAttribute('data-id')); });
+  });
 }
 
 function renderMonth(rows){
@@ -138,7 +165,8 @@ function renderMonth(rows){
   for(var dn=1;dn<=days;dn++){
     var key=year+'-'+('0'+(month+1)).slice(-2)+'-'+('0'+dn).slice(-2);
     var items=map[key]||[];
-    var evs=items.slice(0,3).map(function(e){ return '<div class="mo-ev tag-'+e.category+'"><span>'+_esc(e.title)+'</span></div>'; }).join('');
+    var evs=items.slice(0,2).map(function(e){ return '<div class="mo-ev tag-'+e.category+'"><span>'+_esc(e.title)+'</span></div>'; }).join('');
+    if(items.length>2) evs+='<div class="mo-more">+'+(items.length-2)+'</div>';
     cells+='<div class="mo-cell'+(key===today?' today':'')+'" onclick="goDay(\''+key+'\')"><div class="mo-num">'+dn+'</div>'+evs+'</div>';
   }
   body.innerHTML='<div class="mo-grid"><div class="mo-h">L</div><div class="mo-h">M</div><div class="mo-h">M</div><div class="mo-h">G</div><div class="mo-h">V</div><div class="mo-h">S</div><div class="mo-h">D</div>'+cells+'</div>';
@@ -163,11 +191,29 @@ document.getElementById('nav-prev').onclick=function(){ _shiftAnchor(-1); };
 document.getElementById('nav-next').onclick=function(){ _shiftAnchor(1); };
 Array.prototype.forEach.call(document.querySelectorAll('.vbtn'),function(b){ b.onclick=function(){ _setView(b.getAttribute('data-view')); }; });
 
+// ====== SWIPE orizzontale per navigare (avanti/indietro nella vista) ======
+(function(){
+  var x0=null,y0=null,t0=0;
+  var el=document.getElementById('page');
+  el.addEventListener('touchstart', function(e){ var t=e.touches[0]; x0=t.clientX; y0=t.clientY; t0=Date.now(); }, {passive:true});
+  el.addEventListener('touchend', function(e){
+    if(x0===null) return;
+    var t=e.changedTouches[0]; var dx=t.clientX-x0, dy=t.clientY-y0;
+    x0=null;
+    // swipe valido: orizzontale dominante, abbastanza ampio, abbastanza rapido
+    if(Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*1.8 && (Date.now()-t0)<600){
+      _shiftAnchor(dx<0 ? 1 : -1);   // sx = avanti, dx = indietro
+    }
+  }, {passive:true});
+})();
+
 // ====== DONE (ottimistico) ======
 function toggleDone(id){
   var e=cache.entries.find(function(x){ return x.id===id; }); if(!e) return;
-  e.done=!e.done; _saveCache(); render();                 // UI subito
-  apiPost({ action:'updateEntry', entry:e }).catch(function(err){ console.warn('save done bg:', err.message); });
+  e.done=!e.done; _markPending(id); _saveCache(); render();          // UI subito
+  apiPost({ action:'updateEntry', entry:e })
+    .then(function(saved){ _clearPending(id); if(saved){ _upsert(saved); } })
+    .catch(function(err){ console.warn('save done bg:', err.message); });   // resta pending → riprovabile, non perso
 }
 
 // ====== EDITOR ======
@@ -206,24 +252,30 @@ function saveEntry(){
     done:(state.editing&&state.editing.done)||false };
   if(state.editing){
     entry.id=state.editing.id; entry.eventId=state.editing.eventId; entry.linkedNoteId=state.editing.linkedNoteId||'';
-    _upsert(entry); render(); closeEditor();                                  // UI subito
-    apiPost({ action:'updateEntry', entry:entry }).then(function(saved){ _upsert(saved); }).catch(function(e){ console.warn('upd bg:',e.message); });
+    _markPending(entry.id); _upsert(entry); render(); closeEditor();          // UI subito
+    apiPost({ action:'updateEntry', entry:entry })
+      .then(function(saved){ _clearPending(entry.id); if(saved){ _upsert(saved); } })
+      .catch(function(e){ console.warn('upd bg:',e.message); });              // resta pending → non perso
   } else {
     // id provvisorio locale; il server ne assegna uno definitivo
-    entry.id='tmp_'+Date.now(); entry.eventId='';
-    _upsert(entry); render(); closeEditor();                                  // UI subito
-    var tmpId=entry.id; var toSend=Object.assign({},entry); delete toSend.id;
+    var tmpId='tmp_'+Date.now()+Math.random().toString(36).slice(2,6);
+    entry.id=tmpId; entry.eventId='';
+    _markPending(tmpId); _upsert(entry); render(); closeEditor();             // UI subito
+    var toSend=Object.assign({},entry); delete toSend.id;
     apiPost({ action:'addEntry', entry:toSend })
-      .then(function(saved){ _removeLocal(tmpId); _upsert(saved); render(); })
-      .catch(function(e){ console.warn('add bg:',e.message); });
+      .then(function(saved){ _removeLocal(tmpId); if(saved){ _upsert(saved); } render(); })
+      .catch(function(e){ console.warn('add bg:',e.message); });              // tmp resta pending → visibile, non perso
   }
 }
 function deleteCurrent(){
   if(!state.editing) return;
   if(!confirm('Eliminare?')) return;
   var id=state.editing.id;
-  _removeLocal(id); render(); closeEditor();                                  // UI subito
-  apiPost({ action:'deleteEntry', id:id }).catch(function(e){ console.warn('del bg:',e.message); });
+  var e=cache.entries.find(function(x){ return x.id===id; });
+  if(e){ e._deleted=true; } _markPending(id); _saveCache(); render(); closeEditor();   // UI subito (nascosta)
+  apiPost({ action:'deleteEntry', id:id })
+    .then(function(){ _removeLocal(id); })                                    // confermato: via davvero
+    .catch(function(err){ console.warn('del bg:',err.message); });           // resta pending → riprovabile
 }
 
 // ====== POST-IT (nota globale) ======
