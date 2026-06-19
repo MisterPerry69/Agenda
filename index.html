@@ -49,9 +49,13 @@
   <div id="editor" class="editor hidden">
     <div class="editor-card">
       <input id="ed-title" class="ed-input" placeholder="Cosa?">
-      <input id="ed-time" class="ed-input" type="time">
+      <div class="ed-row">
+        <input id="ed-date" class="ed-input ed-half" type="date">
+        <input id="ed-time" class="ed-input ed-half" type="time">
+      </div>
       <div id="ed-cats" class="ed-cats"></div>
       <label class="ed-google"><input id="ed-google" type="checkbox"> Metti su Google Calendar</label>
+      <button id="ed-topostit" class="ed-topostit hidden" onclick="entryToPostit()">↩ Sposta nel post-it</button>
       <div class="ed-actions">
         <button id="ed-delete" class="hidden" onclick="deleteCurrent()">Elimina</button>
         <button onclick="closeEditor()">Annulla</button>
@@ -75,7 +79,7 @@
   <!-- MODAL scelta su un item del post-it -->
   <div id="pi-choice" class="pi-choice hidden">
     <div class="pi-choice-card">
-      <div id="pi-choice-text" class="pi-choice-text">—</div>
+      <input id="pi-choice-text" class="pi-choice-text" placeholder="testo…">
       <button class="pi-btn pi-done" onclick="piMarkDone()">✓ Segna come fatta</button>
       <button class="pi-btn pi-toagenda" onclick="piToAgenda()">📅 Mettila in agenda oggi</button>
       <button class="pi-btn pi-cancel" onclick="piCloseChoice()">Annulla</button>

@@ -166,9 +166,10 @@ function renderMonth(rows){
   for(var i=0;i<startDow;i++) cells+='<div class="mo-cell mo-empty"></div>';
   for(var dn=1;dn<=days;dn++){
     var key=year+'-'+('0'+(month+1)).slice(-2)+'-'+('0'+dn).slice(-2);
-    var items=map[key]||[];
-    var evs=items.slice(0,2).map(function(e){ return '<div class="mo-ev tag-'+e.category+'"><span>'+_esc(e.title)+'</span></div>'; }).join('');
-    if(items.length>2) evs+='<div class="mo-more">+'+(items.length-2)+'</div>';
+    // nel mese mostro SOLO gli eventi importanti (quelli su Google Calendar)
+    var items=(map[key]||[]).filter(function(e){ return e.onGoogle; });
+    var evs=items.slice(0,3).map(function(e){ return '<div class="mo-ev tag-'+e.category+'"><span>'+_esc(e.title)+'</span></div>'; }).join('');
+    if(items.length>3) evs+='<div class="mo-more">+'+(items.length-3)+'</div>';
     cells+='<div class="mo-cell'+(key===today?' today':'')+'" onclick="goDay(\''+key+'\')"><div class="mo-num">'+dn+'</div>'+evs+'</div>';
   }
   body.innerHTML='<div class="mo-grid"><div class="mo-h">L</div><div class="mo-h">M</div><div class="mo-h">M</div><div class="mo-h">G</div><div class="mo-h">V</div><div class="mo-h">S</div><div class="mo-h">D</div>'+cells+'</div>';
@@ -228,16 +229,19 @@ function openEditor(id){
   state.editing=null; state.selCat='lavoro'; state.fromPostitId=null;
   document.getElementById('ed-title').value='';
   document.getElementById('ed-time').value='';
+  document.getElementById('ed-date').value=state.anchor;   // default: giorno corrente
   document.getElementById('ed-google').checked=false;
   if(id){
     var e=cache.entries.find(function(x){ return x.id===id; });
     if(e){ state.editing=e; state.selCat=e.category||'lavoro';
       document.getElementById('ed-title').value=e.title;
       document.getElementById('ed-time').value=e.time;
+      document.getElementById('ed-date').value=e.date;
       document.getElementById('ed-google').checked=!!e.onGoogle; }
   }
   _renderCats();
   document.getElementById('ed-delete').classList.toggle('hidden', !id);
+  document.getElementById('ed-topostit').classList.toggle('hidden', !id);  // "Al post-it" solo in modifica
   document.getElementById('editor').classList.remove('hidden');
   setTimeout(function(){ document.getElementById('ed-title').focus(); },80);
 }
@@ -246,9 +250,10 @@ function closeEditor(){ document.getElementById('editor').classList.add('hidden'
 function saveEntry(){
   var title=document.getElementById('ed-title').value.trim();
   var time=document.getElementById('ed-time').value;
+  var date=document.getElementById('ed-date').value || state.anchor;   // data scelta (sposta evento)
   if(!title){ alert('Scrivi cosa'); return; }
   if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){ alert('Orario obbligatorio'); return; }
-  var entry={ date:state.anchor, time:time, title:title, category:state.selCat,
+  var entry={ date:date, time:time, title:title, category:state.selCat,
     onGoogle:document.getElementById('ed-google').checked,
     done:(state.editing&&state.editing.done)||false };
   if(state.editing){
@@ -279,6 +284,17 @@ function deleteCurrent(){
   apiPost({ action:'deleteEntry', id:id })
     .then(function(){ _removeLocal(id); })                                    // confermato: via davvero
     .catch(function(err){ console.warn('del bg:',err.message); });           // resta pending → riprovabile
+}
+// sposta un evento dell'agenda nel post-it (diventa una cosa-da-fare generica) e lo rimuove dall'agenda
+function entryToPostit(){
+  if(!state.editing) return;
+  var e=state.editing;
+  postit.items.unshift({ id:'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), text:e.title, done:false });
+  _savePostitLocal(); _pushNote();
+  // rimuovi l'evento dall'agenda (e da Calendar se sincronizzato), come la delete
+  var id=e.id; var c=cache.entries.find(function(x){ return x.id===id; });
+  if(c){ c._deleted=true; } _markPending(id); _saveCache(); render(); closeEditor();
+  apiPost({ action:'deleteEntry', id:id }).then(function(){ _removeLocal(id); }).catch(function(err){ console.warn('toPostit del bg:',err.message); });
 }
 
 // ====== POST-IT (lista di cose da fare generiche) ======
@@ -371,13 +387,20 @@ var piChoiceId=null;
 function piOpenChoice(id){
   var it=_piFind(id); if(!it) return;
   piChoiceId=id;
-  document.getElementById('pi-choice-text').textContent=it.text;
+  document.getElementById('pi-choice-text').value=it.text;   // testo modificabile
   document.getElementById('pi-choice').classList.remove('hidden');
 }
-function piCloseChoice(){ document.getElementById('pi-choice').classList.add('hidden'); piChoiceId=null; }
-function piMarkDone(){ var it=_piFind(piChoiceId); if(it){ it.done=true; _savePostitLocal(); renderPostit(); _pushNote(); } piCloseChoice(); }
+// salva nell'item il testo eventualmente modificato nell'input del modal
+function _piSyncText(){
+  var it=_piFind(piChoiceId); if(!it) return it;
+  var t=document.getElementById('pi-choice-text').value.trim();
+  if(t && t!==it.text){ it.text=t; _savePostitLocal(); _pushNote(); }
+  return it;
+}
+function piCloseChoice(){ _piSyncText(); renderPostit(); document.getElementById('pi-choice').classList.add('hidden'); piChoiceId=null; }
+function piMarkDone(){ var it=_piSyncText(); if(it){ it.done=true; _savePostitLocal(); renderPostit(); _pushNote(); } document.getElementById('pi-choice').classList.add('hidden'); piChoiceId=null; }
 function piToAgenda(){
-  var it=_piFind(piChoiceId); if(!it){ piCloseChoice(); return; }
+  var it=_piSyncText(); if(!it){ piCloseChoice(); return; }
   var pendingId=it.id;
   piCloseChoice(); closePostit();
   // apre editor nuovo evento di OGGI col "cosa?" precompilato; l'item sparisce SOLO se salvo
