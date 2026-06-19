@@ -59,6 +59,7 @@ function boot(){
   syncRange((y-1)+'-12-01', (y+1)+'-01-31');
 }
 function syncRange(from,to){
+  var before = JSON.stringify(cache.entries);
   apiGet({ action:'getAgenda', from:from, to:to })
     .then(function(rows){
       // rimpiazza le voci dell'intervallo con quelle del server,
@@ -69,7 +70,8 @@ function syncRange(from,to){
       });
       cache.entries = keep.concat(rows||[]);
       cache.loadedAt = Date.now(); _saveCache();
-      render();
+      // ridisegna SOLO se i dati sono davvero cambiati → niente flicker/refresh inutile
+      if(JSON.stringify(cache.entries)!==before) render();
     })
     .catch(function(e){ console.warn('sync fallita (uso cache):', e.message); });
 }
@@ -316,13 +318,21 @@ function _isPast(slot, date){
   var now=new Date(); return (now.getHours()*60+now.getMinutes()) >= _slotEnd(slot);
 }
 
+// cache locale del tracking per giorno (così il bookmark NON è vuoto per 4s)
+function _trkCacheGet(date){ try{ return JSON.parse(localStorage.getItem('ql_trk_'+date)||'null'); }catch(e){ return null; } }
+function _trkCacheSet(date, bySlot){ try{ localStorage.setItem('ql_trk_'+date, JSON.stringify(bySlot)); }catch(e){} }
+
 function openTracking(){
   tkState.date = state.anchor;
+  tkState.bySlot = _trkCacheGet(tkState.date) || {};   // subito dalla cache (niente vuoto)
   document.getElementById('tracking').classList.remove('hidden');
   renderTracking();
   apiGet({ action:'getTracking', date:tkState.date }).then(function(d){
-    tkState.bySlot={}; (d&&d.entries||[]).forEach(function(e){ tkState.bySlot[e.slot]=e; });
-    renderTracking();
+    var fresh={}; (d&&d.entries||[]).forEach(function(e){ fresh[e.slot]=e; });
+    // ridisegna solo se cambiato (evita il refresh/flicker inutile)
+    if(JSON.stringify(fresh)!==JSON.stringify(tkState.bySlot)){
+      tkState.bySlot=fresh; _trkCacheSet(tkState.date, fresh); renderTracking();
+    }
   }).catch(function(e){ console.warn('tracking get bg:',e.message); });
 }
 function closeTracking(){ document.getElementById('tracking').classList.add('hidden'); }
@@ -401,10 +411,10 @@ function _rateAdvance(){
 function _rateSaveClose(){
   if(rateState.timer) clearTimeout(rateState.timer);
   var rec=rateState.rec;
-  tkState.bySlot[rec.slot]=rec;                 // UI subito
+  tkState.bySlot[rec.slot]=rec; _trkCacheSet(tkState.date, tkState.bySlot);   // UI + cache subito
   document.getElementById('rate').classList.add('hidden');
   renderTracking();
-  apiPost({ action:'setTracking', rec:rec }).then(function(saved){ if(saved){ tkState.bySlot[saved.slot]=saved; } }).catch(function(e){ console.warn('tracking save bg:',e.message); });
+  apiPost({ action:'setTracking', rec:rec }).then(function(saved){ if(saved){ tkState.bySlot[saved.slot]=saved; _trkCacheSet(tkState.date, tkState.bySlot); } }).catch(function(e){ console.warn('tracking save bg:',e.message); });
 }
 // wiring eventi del modal rate
 document.getElementById('rate-act').addEventListener('keydown', function(e){
