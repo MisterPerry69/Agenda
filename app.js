@@ -57,6 +57,12 @@ function boot(){
   // precarica un ampio intervallo (anno corrente ± qualche mese) in background
   var y = new Date().getFullYear();
   syncRange((y-1)+'-12-01', (y+1)+'-01-31');
+  // badge bookmark: subito dalla cache, poi aggiorna col tracking fresco di oggi
+  refreshBookmarkBadge();
+  apiGet({ action:'getTracking', date:_todayISO() }).then(function(d){
+    var fresh={}; (d&&d.entries||[]).forEach(function(e){ fresh[e.slot]=e; });
+    _trkCacheSet(_todayISO(), fresh); refreshBookmarkBadge();
+  }).catch(function(){});
 }
 function syncRange(from,to){
   var before = JSON.stringify(cache.entries);
@@ -268,7 +274,14 @@ function saveEntry(){
     entry.id=tmpId; entry.eventId='';
     _markPending(tmpId); _upsert(entry); render(); closeEditor();             // UI subito
     // se l'evento nasce da un item del post-it: ora che è salvato, l'item sparisce
-    if(state.fromPostitId){ postit.items=postit.items.filter(function(i){return i.id!==state.fromPostitId;}); _savePostitLocal(); _pushNote(); state.fromPostitId=null; }
+    // dalla lista d'origine (main o una temp)
+    if(state.fromPostitId){
+      var src = state.fromPostitList && state.fromPostitList!=='main'
+        ? tempLists.filter(function(l){return l.id===state.fromPostitList;})[0] : postit;
+      if(src){ src.items=src.items.filter(function(i){return i.id!==state.fromPostitId;});
+        if(src===postit){ _savePostitLocal(); _pushNote(); } else { _saveTempLocal(); _renderTabs(); } }
+      state.fromPostitId=null; state.fromPostitList=null;
+    }
     var toSend=Object.assign({},entry); delete toSend.id;
     apiPost({ action:'addEntry', entry:toSend })
       .then(function(saved){ _removeLocal(tmpId); if(saved){ _upsert(saved); } render(); })
@@ -298,46 +311,93 @@ function entryToPostit(){
 }
 
 // ====== POST-IT (lista di cose da fare generiche) ======
-// modello: { color, items:[ {id, text, done} ] }
+// modello main (sincronizzato col backend): { color, items:[ {id, text, done} ] }
 var postit = { color:POSTIT_COLORS[0], items:[] };
+// liste usa-e-getta SOLO LOCALI (max 2): [{ id, items:[{id,text,done}] }].
+// Nate via swipe a destra dal post-it main; si "bruciano" quando l'ultimo item è spuntato.
+var MAX_TEMP = 2;
+var tempLists = [];
+// quale post-it è aperto/attivo nel modal: 'main' oppure un id di tempList.
+var activePostit = 'main';
+
 function _loadPostit(){
   try{ var p=JSON.parse(localStorage.getItem('ql_postit')||'null'); if(p&&p.items){ postit=p; } }catch(e){}
   if(!postit.color) postit.color=POSTIT_COLORS[0];
   document.documentElement.style.setProperty('--postit', postit.color);
+  try{ var t=JSON.parse(localStorage.getItem('ql_templists')||'null'); if(t&&t.length) tempLists=t; }catch(e){}
+  _renderTabs();
 }
 function _savePostitLocal(){ try{ localStorage.setItem('ql_postit', JSON.stringify(postit)); }catch(e){} }
+function _saveTempLocal(){ try{ localStorage.setItem('ql_templists', JSON.stringify(tempLists)); }catch(e){} }
 function _pushNote(){ apiPost({ action:'setNote', note:postit }).catch(function(e){ console.warn('note bg:',e.message); }); }
 
+// ritorna l'oggetto-lista attivo (main o temp). main ha .color, temp no.
+function _active(){
+  if(activePostit==='main') return postit;
+  return tempLists.filter(function(l){ return l.id===activePostit; })[0] || postit;
+}
+function _isTemp(){ return activePostit!=='main'; }
+// persiste la lista attiva (sul backend solo se è il main)
+function _persistActive(){
+  if(_isTemp()){ _saveTempLocal(); }
+  else { _savePostitLocal(); _pushNote(); }
+}
+
 function openPostit(){
-  document.documentElement.style.setProperty('--postit', postit.color);
-  document.getElementById('postit-colors').innerHTML = POSTIT_COLORS.map(function(c){
-    return '<button style="background:'+c+'" onclick="setPostitColor(\''+c+'\')"></button>';
-  }).join('');
-  renderPostit();
-  document.getElementById('postit-modal').classList.remove('hidden');
-  setTimeout(function(){ document.getElementById('postit-input').focus(); }, 80);
-  // versione fresca dal server in bg (ridisegna solo se cambiata)
+  activePostit='main';
+  _openActive();
+  // versione fresca del main dal server in bg (ridisegna solo se cambiata e ancora sul main)
   var before=JSON.stringify(postit);
   apiGet({ action:'getNote' }).then(function(d){
     if(d&&d.items){ postit={ color:d.color||postit.color, items:d.items }; _savePostitLocal();
-      if(JSON.stringify(postit)!==before && !document.getElementById('postit-modal').classList.contains('hidden')){
+      if(JSON.stringify(postit)!==before && activePostit==='main' && !document.getElementById('postit-modal').classList.contains('hidden')){
         document.documentElement.style.setProperty('--postit', postit.color); renderPostit();
       }
     }
   }).catch(function(){});
 }
-function closePostit(){ document.getElementById('postit-modal').classList.add('hidden'); }
+// apre il temp post-it con un dato id
+function openTemp(id){ activePostit=id; _openActive(); }
+// apre il modal sul post-it attivo (main o temp), impostando aspetto e contenuto
+function _openActive(){
+  var modal=document.getElementById('postit-modal');
+  var box=document.getElementById('postit');
+  box.classList.remove('burning');   // pulizia difensiva se un burn è stato interrotto
+  if(_isTemp()){
+    box.classList.add('temp');
+    document.getElementById('postit-colors').innerHTML='';   // i temp non hanno colori
+  } else {
+    box.classList.remove('temp');
+    document.documentElement.style.setProperty('--postit', postit.color);
+    document.getElementById('postit-colors').innerHTML = POSTIT_COLORS.map(function(c){
+      return '<button style="background:'+c+'" onclick="setPostitColor(\''+c+'\')"></button>';
+    }).join('');
+  }
+  renderPostit();
+  modal.classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('postit-input').focus(); }, 80);
+}
+function closePostit(){
+  // un temp ancora vuoto sarebbe inutile, ma lo conserviamo (può riaprirlo dal tab)
+  document.getElementById('postit-modal').classList.add('hidden');
+  activePostit='main';
+}
 function setPostitColor(c){ postit.color=c; document.documentElement.style.setProperty('--postit',c); _savePostitLocal(); _pushNote(); }
 
 // ordina: prima i non fatti, poi i fatti (in fondo, come traccia)
 function _piOrdered(){
-  var todo=postit.items.filter(function(i){return !i.done;});
-  var done=postit.items.filter(function(i){return i.done;});
+  var items=_active().items;
+  var todo=items.filter(function(i){return !i.done;});
+  var done=items.filter(function(i){return i.done;});
   return todo.concat(done);
 }
 function renderPostit(){
   var list=document.getElementById('postit-list');
-  if(!postit.items.length){ list.innerHTML='<div style="opacity:.45;font-style:italic;padding:10px 2px">Niente ancora. Scrivi sopra e premi invio.</div>'; return; }
+  var items=_active().items;
+  if(!items.length){
+    var hint=_isTemp() ? 'Lista al volo. Scrivi sopra e premi invio.' : 'Niente ancora. Scrivi sopra e premi invio.';
+    list.innerHTML='<div style="opacity:.45;font-style:italic;padding:10px 2px">'+hint+'</div>'; return;
+  }
   list.innerHTML = _piOrdered().map(function(it){
     return '<div class="pi-item'+(it.done?' done':'')+'" data-id="'+it.id+'">'
       +'<span class="pi-check" data-act="toggle"></span>'
@@ -348,11 +408,39 @@ function renderPostit(){
 }
 function addPostitItem(text){
   text=text.trim(); if(!text) return;
-  postit.items.unshift({ id:'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), text:text, done:false });
-  _savePostitLocal(); renderPostit(); _pushNote();
+  _active().items.unshift({ id:'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), text:text, done:false });
+  _persistActive(); renderPostit(); _renderTabs();
 }
 document.getElementById('postit-input').addEventListener('keydown', function(e){
   if(e.key==='Enter'){ e.preventDefault(); addPostitItem(this.value); this.value=''; }
+});
+
+// SWIPE A DESTRA sul post-it (solo dal MAIN) → crea una lista usa-e-getta.
+// Gesto orizzontale chiaro per non confliggere con lo scroll verticale della lista.
+(function(){
+  var box=document.getElementById('postit');
+  var x0=null,y0=null,horiz=false;
+  box.addEventListener('touchstart', function(e){ x0=e.touches[0].clientX; y0=e.touches[0].clientY; horiz=false; }, {passive:true});
+  box.addEventListener('touchmove', function(e){
+    if(x0===null) return;
+    var dx=e.touches[0].clientX-x0, dy=e.touches[0].clientY-y0;
+    if(!horiz && Math.abs(dx)>14 && Math.abs(dx)>Math.abs(dy)*1.6) horiz=true;
+    if(horiz && dx>0 && activePostit==='main'){ box.style.transform='rotate(-1deg) translateX('+Math.min(dx,70)+'px)'; }
+  }, {passive:true});
+  box.addEventListener('touchend', function(e){
+    if(horiz && activePostit==='main'){
+      var dx=e.changedTouches[0].clientX-x0;
+      box.style.transform='';
+      if(dx>70){
+        if(!_createTemp()){ box.classList.add('shake'); setTimeout(function(){ box.classList.remove('shake'); },350); }
+      }
+    }
+    x0=null;y0=null;horiz=false;
+  }, {passive:true});
+})();
+// fallback desktop/test: doppio click sul post-it main crea una lista al volo
+document.getElementById('postit').addEventListener('dblclick', function(){
+  if(activePostit==='main') _createTemp();
 });
 
 // item: tap su check = toggle fatto; tap su testo = modal scelta; swipe sx = elimina (se fatto)
@@ -378,9 +466,19 @@ function _wirePiItem(el){
     x0=null;
   }, {passive:true});
 }
-function _piFind(id){ return postit.items.filter(function(i){return i.id===id;})[0]; }
-function piToggle(id){ var it=_piFind(id); if(!it) return; it.done=!it.done; _savePostitLocal(); renderPostit(); _pushNote(); }
-function piDelete(id){ postit.items=postit.items.filter(function(i){return i.id!==id;}); _savePostitLocal(); renderPostit(); _pushNote(); }
+function _piFind(id){ return _active().items.filter(function(i){return i.id===id;})[0]; }
+function piToggle(id){
+  var it=_piFind(id); if(!it) return; it.done=!it.done; _persistActive(); renderPostit(); _renderTabs();
+  // temp list: se tutti gli item sono ora spuntati → si brucia e sparisce
+  if(_isTemp()){
+    var items=_active().items;
+    if(items.length && items.every(function(i){return i.done;})) _burnActiveTemp();
+  }
+}
+function piDelete(id){
+  var a=_active(); a.items=a.items.filter(function(i){return i.id!==id;});
+  _persistActive(); renderPostit(); _renderTabs();
+}
 
 // ---- modal scelta su item ----
 var piChoiceId=null;
@@ -394,21 +492,60 @@ function piOpenChoice(id){
 function _piSyncText(){
   var it=_piFind(piChoiceId); if(!it) return it;
   var t=document.getElementById('pi-choice-text').value.trim();
-  if(t && t!==it.text){ it.text=t; _savePostitLocal(); _pushNote(); }
+  if(t && t!==it.text){ it.text=t; _persistActive(); }
   return it;
 }
-function piCloseChoice(){ _piSyncText(); renderPostit(); document.getElementById('pi-choice').classList.add('hidden'); piChoiceId=null; }
-function piMarkDone(){ var it=_piSyncText(); if(it){ it.done=true; _savePostitLocal(); renderPostit(); _pushNote(); } document.getElementById('pi-choice').classList.add('hidden'); piChoiceId=null; }
+function piCloseChoice(){ _piSyncText(); renderPostit(); _renderTabs(); document.getElementById('pi-choice').classList.add('hidden'); piChoiceId=null; }
+function piMarkDone(){
+  var it=_piSyncText(); document.getElementById('pi-choice').classList.add('hidden');
+  if(it){ it.done=true; _persistActive(); renderPostit(); _renderTabs();
+    if(_isTemp()){ var items=_active().items; if(items.length && items.every(function(i){return i.done;})) _burnActiveTemp(); }
+  }
+  piChoiceId=null;
+}
 function piToAgenda(){
   var it=_piSyncText(); if(!it){ piCloseChoice(); return; }
-  var pendingId=it.id;
+  var pendingId=it.id; var fromList=activePostit;
   piCloseChoice(); closePostit();
   // apre editor nuovo evento di OGGI col "cosa?" precompilato; l'item sparisce SOLO se salvo
   openEditor();
   state.anchor=_todayISO();
   document.getElementById('ed-title').value=it.text;
-  // memorizza quale item rimuovere dopo il salvataggio
-  state.fromPostitId=pendingId;
+  // memorizza quale item (e da quale lista) rimuovere dopo il salvataggio
+  state.fromPostitId=pendingId; state.fromPostitList=fromList;
+}
+
+// ---- liste usa-e-getta (temp) ----
+// Le linguette dei temp si impilano sopra .note-btn, una per lista, cliccabili.
+function _renderTabs(){
+  var wrap=document.getElementById('temp-tabs'); if(!wrap) return;
+  wrap.innerHTML = tempLists.map(function(l){
+    var n=l.items.filter(function(i){return !i.done;}).length;
+    return '<button class="temp-tab" onclick="openTemp(\''+l.id+'\')" title="Lista al volo">'
+      + (n? '<span class="temp-tab-n">'+n+'</span>' : '') + '</button>';
+  }).join('');
+}
+// crea una nuova lista usa-e-getta (se c'è spazio) e la apre
+function _createTemp(){
+  if(tempLists.length>=MAX_TEMP) return false;
+  var id='tl'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  tempLists.push({ id:id, items:[] });
+  _saveTempLocal(); _renderTabs();
+  openTemp(id);
+  return true;
+}
+// "brucia" il temp attivo: animazione bottom→top, poi rimozione e chiusura modal
+function _burnActiveTemp(){
+  var id=activePostit;
+  var box=document.getElementById('postit');
+  box.classList.add('burning');
+  setTimeout(function(){
+    tempLists=tempLists.filter(function(l){return l.id!==id;});
+    _saveTempLocal(); _renderTabs();
+    box.classList.remove('burning','temp');
+    document.getElementById('postit-modal').classList.add('hidden');
+    activePostit='main';
+  }, 1150);   // deve combaciare con la durata di @keyframes burn
 }
 
 // ====== TRACKING (report a fasce + voti) ======
@@ -468,6 +605,16 @@ function renderTracking(){
 function emojiP(v){ return v<=2?'💀':v<=4?'😩':v<=6?'😐':v<=8?'😎':'🔥'; }
 function emojiU(v){ return v<=2?'🗑️':v<=4?'🤏':v<=6?'👍':v<=8?'💪':'🚀'; }
 
+// ---- effetto bookmark: pulsa se OGGI ci sono fasce passate non votate ----
+function _slotVoted(rec){ return rec && (rec.pleasure!=null || rec.utility!=null || rec.activity); }
+function refreshBookmarkBadge(){
+  var bm=document.getElementById('bookmark'); if(!bm) return;
+  var bySlot = _trkCacheGet(_todayISO()) || {};
+  var arretrate = TK_SLOTS.filter(function(s){ return _isPast(s, _todayISO()) && !_slotVoted(bySlot[s]); }).length;
+  bm.classList.toggle('pending', arretrate>0);
+  bm.setAttribute('data-count', arretrate>0 ? arretrate : '');
+}
+
 // ====== MODAL 3-STEP (lazy) ======
 var rateState = { slot:null, step:1, timer:null, rec:null };
 function openRate(slot){
@@ -519,7 +666,7 @@ function _rateSaveClose(){
   var rec=rateState.rec;
   tkState.bySlot[rec.slot]=rec; _trkCacheSet(tkState.date, tkState.bySlot);   // UI + cache subito
   document.getElementById('rate').classList.add('hidden');
-  renderTracking();
+  renderTracking(); refreshBookmarkBadge();
   apiPost({ action:'setTracking', rec:rec }).then(function(saved){ if(saved){ tkState.bySlot[saved.slot]=saved; _trkCacheSet(tkState.date, tkState.bySlot); } }).catch(function(e){ console.warn('tracking save bg:',e.message); });
 }
 // wiring eventi del modal rate

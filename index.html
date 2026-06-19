@@ -26,6 +26,8 @@
     <!-- bookmark e post-it stanno FUORI da .page così possono sbordare dai bordi -->
     <button id="bookmark" class="bookmark" onclick="openTracking()" title="Voti del giorno"></button>
     <button id="note-btn" class="note-btn" onclick="openPostit()"></button>
+    <!-- linguette delle liste usa-e-getta, impilate sopra al post-it main, cliccabili -->
+    <div id="temp-tabs" class="temp-tabs"></div>
 
     <div class="page" id="page">
       <header class="ag-head">
@@ -65,12 +67,19 @@
   <!-- MODAL POST-IT (lista di cose da fare generiche) -->
   <div id="postit-modal" class="postit-modal hidden">
     <div class="postit" id="postit">
+      <!-- due forellini in alto: visibili solo sulle liste usa-e-getta (foglio strappato dal blocco) -->
+      <span class="punch-hole punch-l"></span>
+      <span class="punch-hole punch-r"></span>
       <div class="postit-top">
         <div class="postit-colors" id="postit-colors"></div>
         <button class="postit-close" onclick="closePostit()">✕</button>
       </div>
       <input id="postit-input" class="postit-input" placeholder="Aggiungi… (invio)">
       <div id="postit-list" class="postit-list"></div>
+      <!-- suggerimento: swipe a destra per creare una lista al volo (solo sul main) -->
+      <div class="postit-hint">swipe → lista al volo</div>
+      <!-- fronte di fiamma usato dall'animazione "burn" quando la lista si esaurisce -->
+      <span class="burn-edge"></span>
     </div>
   </div>
 

@@ -232,6 +232,81 @@ body{
 .pi-item .pi-del{ position:absolute; right:8px; top:50%; transform:translateY(-50%); color:var(--red); font-size:18px; opacity:0; transition:opacity .15s; }
 .pi-item.swiping{ transition:transform .15s; }
 
+/* ---- liste usa-e-getta: linguette impilate sopra al note-btn ---- */
+.temp-tabs{
+  position:absolute; left:5px; bottom:196px; z-index:6;   /* 120 (note-btn) + 72 (altezza) + 4 di stacco */
+  display:flex; flex-direction:column-reverse; gap:5px;
+}
+.temp-tab{
+  width:34px; height:30px; border:0; cursor:pointer; padding:0; position:relative;
+  border-radius:0 7px 7px 0;
+  /* foglio a quadretti azzurrino, distinto dal post-it giallo/rosa */
+  background:
+    repeating-linear-gradient(#bfe0ff00 0 6px, #8fc4ee44 6px 6.5px),
+    repeating-linear-gradient(90deg,#bfe0ff00 0 6px, #8fc4ee44 6px 6.5px),
+    #eaf4ff;
+  box-shadow:1px 1px 3px rgba(0,0,0,.25);
+}
+.temp-tab-n{
+  position:absolute; right:4px; top:50%; transform:translateY(-50%);
+  font-family:'Patrick Hand',cursive; font-size:13px; color:#2b6da3; font-weight:700;
+}
+
+/* ---- aspetto "lista al volo" del modal (foglio a quadretti strappato) ---- */
+.postit.temp{
+  background:
+    repeating-linear-gradient(#cfe6ff00 0 22px, #9ec9ee55 22px 23px),
+    repeating-linear-gradient(90deg,#cfe6ff00 0 22px, #9ec9ee55 22px 23px),
+    #f3f9ff;
+  transform:rotate(.6deg);
+  /* bordo superiore leggermente irregolare: come strappato dal blocco */
+  clip-path:polygon(0 9px, 4% 4px, 9% 10px, 15% 3px, 22% 9px, 30% 4px, 38% 10px, 47% 3px,
+    56% 9px, 64% 4px, 73% 10px, 82% 3px, 90% 9px, 96% 4px, 100% 9px, 100% 100%, 0 100%);
+}
+.punch-hole{ display:none; }
+.postit.temp .punch-hole{
+  display:block; position:absolute; top:13px; width:16px; height:16px; border-radius:50%;
+  background:rgba(20,18,16,.55); box-shadow:inset 0 1px 2px rgba(0,0,0,.5);
+}
+.postit.temp .punch-l{ left:28%; }
+.postit.temp .punch-r{ right:28%; }
+.postit.temp .postit-input{ margin-top:6px; }
+
+.postit-hint{
+  flex-shrink:0; text-align:center; font-family:'Patrick Hand',cursive; font-size:13px;
+  color:rgba(0,0,0,.35); padding-top:6px; font-style:italic;
+}
+.postit.temp .postit-hint{ display:none; }   /* nei temp lo swipe non crea nulla */
+
+/* feedback "max raggiunto" */
+.postit.shake{ animation:shake .35s ease; }
+@keyframes shake{ 0%,100%{transform:rotate(-1deg)} 25%{transform:rotate(-1deg) translateX(-7px)} 75%{transform:rotate(-1deg) translateX(7px)} }
+
+/* ---- BURN: il foglio si consuma dal basso verso l'alto ---- */
+.burn-edge{ display:none; }
+.postit.burning{
+  animation:burnAway 1.1s ease-in forwards; pointer-events:none; overflow:hidden;
+}
+.postit.burning .burn-edge{
+  display:block; position:absolute; left:-4px; right:-4px; height:46px; z-index:2; pointer-events:none;
+  /* fronte di fiamma: brace scura in basso → arancio → giallo caldo in cima */
+  background:linear-gradient(to top,
+    rgba(40,12,0,.95) 0%, #7a1c00 12%, #d83400 30%, #ff6a00 50%, #ffb02e 72%, #ffe999 88%, rgba(255,233,153,0) 100%);
+  filter:blur(1px) saturate(1.3);
+  animation:burnEdge 1.1s ease-in forwards;
+}
+/* il bordo del mask (transparent→nero) sale dal basso: sotto la linea = mangiato,
+   con una fascia di ~7% morbida che fa da fronte di bruciatura */
+@keyframes burnAway{
+  0%   { -webkit-mask-image:linear-gradient(to top, transparent 0%, #000 7%); mask-image:linear-gradient(to top, transparent 0%, #000 7%); opacity:1; filter:none; }
+  100% { -webkit-mask-image:linear-gradient(to top, transparent 100%, #000 107%); mask-image:linear-gradient(to top, transparent 100%, #000 107%); opacity:1; filter:sepia(.5) brightness(.85); }
+}
+@keyframes burnEdge{
+  0%   { bottom:0%;  opacity:1; }
+  92%  { opacity:1; }
+  100% { bottom:100%; opacity:0; }
+}
+
 /* modal scelta su item */
 .pi-choice{ position:fixed; inset:0; z-index:35; display:flex; align-items:flex-end; justify-content:center;
   background:rgba(20,18,16,.5); padding:18px; animation:riseIn .15s ease; }
@@ -300,6 +375,14 @@ body{
   box-shadow:1px 2px 4px rgba(0,0,0,.35);
 }
 .bookmark:active{ transform:translateY(1px); }
+/* fasce arretrate non votate: il bookmark pulsa e mostra un pallino col numero */
+@keyframes bmPulse { 0%,100%{ filter:none } 50%{ filter:brightness(1.35) } }
+.bookmark.pending{ animation:bmPulse 1.6s ease-in-out infinite; }
+.bookmark.pending::after{
+  content:attr(data-count); position:absolute; top:6px; right:-7px; min-width:18px; height:18px; padding:0 4px;
+  background:#fff; color:var(--red); border-radius:9px; font-family:'Patrick Hand',cursive; font-size:12px;
+  display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.4);
+}
 
 /* ===================== VISTA TRACKING ===================== */
 .tracking{ position:fixed; inset:0; z-index:15; background:var(--bg-dark); padding:14px 10px;
