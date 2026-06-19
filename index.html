@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>QuestLog</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="theme-color" content="#4a2f20">
+  <meta name="theme-color" content="#232020">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,28 +12,36 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Gochi+Hand&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <!-- COVER PLACEHOLDER: la grafica definitiva la realizza l'utente -->
+  <!-- COVER PLACEHOLDER: la grafica definitiva la realizza l'utente.
+       Durante la cover si fa il precaricamento dati (fruizione poi immediata). -->
   <div id="cover" class="cover" onclick="openAgenda()">
     <div class="cover-placeholder">QuestLog<br><small>(cover placeholder — tap per aprire)</small></div>
   </div>
 
   <div id="app" class="app hidden">
-    <header class="ag-head">
-      <button id="nav-prev" class="nav-btn">‹</button>
-      <div id="ag-title" class="ag-title">—</div>
-      <button id="nav-next" class="nav-btn">›</button>
-      <div class="view-switch">
-        <button data-view="day"  class="vbtn active">Giorno</button>
-        <button data-view="week" class="vbtn">Settimana</button>
+    <div class="page" id="page">
+      <header class="ag-head">
+        <div id="ag-title" class="ag-title">—</div>
+        <button id="nav-prev" class="nav-btn">‹</button>
+        <button id="nav-next" class="nav-btn">›</button>
+      </header>
+
+      <main id="ag-body" class="ag-body"></main>
+
+      <!-- post-it: quadrato in basso a sinistra -->
+      <button id="note-btn" class="note-btn" onclick="openPostit()">✎</button>
+
+      <!-- barra viste in basso -->
+      <nav class="view-switch">
+        <button data-view="day"   class="vbtn active">Giorno</button>
+        <button data-view="week"  class="vbtn">Settimana</button>
         <button data-view="month" class="vbtn">Mese</button>
-      </div>
-    </header>
-    <main id="ag-body" class="ag-body"></main>
-    <button id="add-fab" class="add-fab" onclick="openEditor()">＋</button>
+      </nav>
+    </div>
   </div>
 
   <!-- EDITOR VOCE -->
@@ -48,6 +56,17 @@
         <button onclick="closeEditor()">Annulla</button>
         <button id="ed-save" onclick="saveEntry()">Salva</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL POST-IT (nota globale) -->
+  <div id="postit-modal" class="postit-modal hidden">
+    <div class="postit" id="postit">
+      <div class="postit-top">
+        <div class="postit-colors" id="postit-colors"></div>
+        <button class="postit-close" onclick="closePostit()">✕</button>
+      </div>
+      <textarea id="postit-text" placeholder="Scrivi quel che vuoi…"></textarea>
     </div>
   </div>
 
