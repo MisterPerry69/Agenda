@@ -19,7 +19,7 @@
   <!-- COVER PLACEHOLDER: la grafica definitiva la realizza l'utente.
        Durante la cover si fa il precaricamento dati (fruizione poi immediata). -->
   <div id="cover" class="cover" onclick="openAgenda()">
-    <div class="cover-placeholder">QuestLog<br><small>(cover placeholder — tap per aprire)</small></div>
+    <div class="cover-hint">tap per aprire</div>
   </div>
 
   <div id="app" class="app hidden">
@@ -60,14 +60,25 @@
     </div>
   </div>
 
-  <!-- MODAL POST-IT (nota globale) -->
+  <!-- MODAL POST-IT (lista di cose da fare generiche) -->
   <div id="postit-modal" class="postit-modal hidden">
     <div class="postit" id="postit">
       <div class="postit-top">
         <div class="postit-colors" id="postit-colors"></div>
         <button class="postit-close" onclick="closePostit()">✕</button>
       </div>
-      <textarea id="postit-text" placeholder="Scrivi quel che vuoi…"></textarea>
+      <input id="postit-input" class="postit-input" placeholder="Aggiungi… (invio)">
+      <div id="postit-list" class="postit-list"></div>
+    </div>
+  </div>
+
+  <!-- MODAL scelta su un item del post-it -->
+  <div id="pi-choice" class="pi-choice hidden">
+    <div class="pi-choice-card">
+      <div id="pi-choice-text" class="pi-choice-text">—</div>
+      <button class="pi-btn pi-done" onclick="piMarkDone()">✓ Segna come fatta</button>
+      <button class="pi-btn pi-toagenda" onclick="piToAgenda()">📅 Mettila in agenda oggi</button>
+      <button class="pi-btn pi-cancel" onclick="piCloseChoice()">Annulla</button>
     </div>
   </div>
 

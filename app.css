@@ -31,22 +31,22 @@ body{
 .hidden{ display:none !important; }
 
 @keyframes riseIn { from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+@keyframes flicker { 0%,100%{ opacity:.55 } 50%{ opacity:.25 } }
 @keyframes popIn  { from{ opacity:0; transform:translateY(100%) } to{ opacity:1; transform:none } }
 
 /* ===================== COVER ===================== */
+/* l'immagine cover.png (la disegni tu, 1080×1920 ritratto) riempie lo schermo.
+   Finché non la sostituisci si vede il placeholder dentro. */
 .cover{
   position:fixed; inset:0; cursor:pointer; z-index:50;
   display:flex; align-items:center; justify-content:center;
-  background:var(--bg-dark);
+  background:var(--bg-dark) center/cover no-repeat;
+  background-image:url("cover.png");
 }
-.cover-placeholder{
-  text-align:center; font-family:'Gochi Hand', cursive;
-  font-size:clamp(34px,12vw,54px); color:var(--paper); letter-spacing:1px;
-  padding:46px 40px; border:2px dashed rgba(255,255,255,.25); border-radius:14px;
-}
-.cover-placeholder small{
-  display:block; margin-top:14px; font-family:'Patrick Hand',cursive;
-  font-size:14px; color:rgba(255,255,255,.4); letter-spacing:0;
+.cover-hint{
+  position:absolute; bottom:60px; left:0; right:0; text-align:center;
+  font-family:'Patrick Hand',cursive; font-size:15px; color:rgba(255,255,255,.55);
+  letter-spacing:1px; animation:flicker 2.4s ease-in-out infinite;
 }
 
 /* ===================== PAGINA (quaderno su scuro) ===================== */
@@ -207,10 +207,37 @@ body{
 .postit-colors{ display:flex; gap:8px; }
 .postit-colors button{ width:22px; height:22px; border-radius:50%; border:2px solid rgba(0,0,0,.25); cursor:pointer; }
 .postit-close{ background:none; border:none; font-family:'Patrick Hand',cursive; font-size:24px; cursor:pointer; color:var(--ink); }
-.postit textarea{
-  flex:1; width:100%; resize:none; border:none; background:transparent; outline:none;
-  font-family:'Patrick Hand',cursive; font-size:19px; line-height:1.5; color:var(--ink);
+.postit-input{
+  width:100%; border:none; background:transparent; outline:none; flex-shrink:0;
+  border-bottom:2px solid rgba(0,0,0,.25); padding:6px 2px; margin-bottom:8px;
+  font-family:'Gochi Hand',cursive; font-size:20px; color:var(--ink);
 }
+.postit-input::placeholder{ color:rgba(0,0,0,.4); }
+.postit-list{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.pi-item{ display:flex; align-items:flex-start; gap:9px; padding:9px 2px; position:relative;
+  border-bottom:1px solid rgba(0,0,0,.12); font-family:'Patrick Hand',cursive; font-size:19px; color:var(--ink); }
+.pi-check{ width:18px; height:18px; flex-shrink:0; margin-top:2px;
+  background:no-repeat center/contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4,5 C3,11 4,18 5,20 C10,21 17,20 20,19 C21,13 20,7 19,4 C13,3 8,3 4,5 Z' stroke='%231a1a1a' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.pi-item.done .pi-check{ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4,5 C3,11 4,18 5,20 C10,21 17,20 20,19 C21,13 20,7 19,4 C13,3 8,3 4,5 Z' stroke='%231a1a1a' stroke-width='1.8' fill='none'/%3E%3Cpath d='M6,12 C8,15 9,17 11,18 C14,12 17,7 20,3' stroke='%231a1a1a' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.pi-item.done{ opacity:.5; }
+.pi-item.done .pi-text{ text-decoration:line-through; }
+.pi-text{ flex:1; cursor:pointer; word-break:break-word; }
+/* swipe-to-delete: pista rossa sotto l'item */
+.pi-item .pi-del{ position:absolute; right:8px; top:50%; transform:translateY(-50%); color:var(--red); font-size:18px; opacity:0; transition:opacity .15s; }
+.pi-item.swiping{ transition:transform .15s; }
+
+/* modal scelta su item */
+.pi-choice{ position:fixed; inset:0; z-index:35; display:flex; align-items:flex-end; justify-content:center;
+  background:rgba(20,18,16,.5); padding:18px; animation:riseIn .15s ease; }
+.pi-choice-card{ width:100%; max-width:360px; background:var(--paper); border-radius:18px; padding:18px;
+  box-shadow:0 16px 40px rgba(0,0,0,.4); animation:popIn .22s ease;
+  background-image:radial-gradient(var(--dot) 1.0px,transparent 1.3px); background-size:19px 19px; }
+.pi-choice-text{ font-family:'Gochi Hand',cursive; font-size:20px; color:var(--ink); text-align:center;
+  margin:4px 0 16px; padding-bottom:10px; border-bottom:2px solid var(--paper-edge,#d8d2c0); }
+.pi-btn{ display:block; width:100%; font-family:'Patrick Hand',cursive; font-size:17px; cursor:pointer;
+  padding:13px; margin-bottom:9px; border-radius:10px; border:2px solid var(--ink); background:transparent; color:var(--ink); }
+.pi-toagenda{ background:var(--ink); color:var(--paper); }
+.pi-cancel{ border-color:transparent; color:var(--ink-soft); margin-bottom:0; }
 
 /* ===================== VISTA SETTIMANA ===================== */
 .wk-block{ margin-bottom:14px; animation:riseIn .3s ease both; }

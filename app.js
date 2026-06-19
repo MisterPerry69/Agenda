@@ -225,7 +225,7 @@ function _renderCats(){
 }
 function selCat(c){ state.selCat=c; _renderCats(); }
 function openEditor(id){
-  state.editing=null; state.selCat='lavoro';
+  state.editing=null; state.selCat='lavoro'; state.fromPostitId=null;
   document.getElementById('ed-title').value='';
   document.getElementById('ed-time').value='';
   document.getElementById('ed-google').checked=false;
@@ -262,6 +262,8 @@ function saveEntry(){
     var tmpId='tmp_'+Date.now()+Math.random().toString(36).slice(2,6);
     entry.id=tmpId; entry.eventId='';
     _markPending(tmpId); _upsert(entry); render(); closeEditor();             // UI subito
+    // se l'evento nasce da un item del post-it: ora che è salvato, l'item sparisce
+    if(state.fromPostitId){ postit.items=postit.items.filter(function(i){return i.id!==state.fromPostitId;}); _savePostitLocal(); _pushNote(); state.fromPostitId=null; }
     var toSend=Object.assign({},entry); delete toSend.id;
     apiPost({ action:'addEntry', entry:toSend })
       .then(function(saved){ _removeLocal(tmpId); if(saved){ _upsert(saved); } render(); })
@@ -279,31 +281,112 @@ function deleteCurrent(){
     .catch(function(err){ console.warn('del bg:',err.message); });           // resta pending → riprovabile
 }
 
-// ====== POST-IT (nota globale) ======
-var postit = { text:'', color:POSTIT_COLORS[0] };
+// ====== POST-IT (lista di cose da fare generiche) ======
+// modello: { color, items:[ {id, text, done} ] }
+var postit = { color:POSTIT_COLORS[0], items:[] };
 function _loadPostit(){
-  try{ var p=JSON.parse(localStorage.getItem('ql_postit')||'null'); if(p) postit=p; }catch(e){}
+  try{ var p=JSON.parse(localStorage.getItem('ql_postit')||'null'); if(p&&p.items){ postit=p; } }catch(e){}
+  if(!postit.color) postit.color=POSTIT_COLORS[0];
   document.documentElement.style.setProperty('--postit', postit.color);
 }
 function _savePostitLocal(){ try{ localStorage.setItem('ql_postit', JSON.stringify(postit)); }catch(e){} }
+function _pushNote(){ apiPost({ action:'setNote', note:postit }).catch(function(e){ console.warn('note bg:',e.message); }); }
+
 function openPostit(){
-  document.getElementById('postit-text').value = postit.text;
   document.documentElement.style.setProperty('--postit', postit.color);
   document.getElementById('postit-colors').innerHTML = POSTIT_COLORS.map(function(c){
     return '<button style="background:'+c+'" onclick="setPostitColor(\''+c+'\')"></button>';
   }).join('');
+  renderPostit();
   document.getElementById('postit-modal').classList.remove('hidden');
-  // carica versione fresca dal server in bg
-  apiGet({ action:'getNote' }).then(function(d){ if(d&&typeof d.text==='string'){ postit.text=d.text; if(d.color) postit.color=d.color; _savePostitLocal();
-    if(!document.getElementById('postit-modal').classList.contains('hidden')) document.getElementById('postit-text').value=postit.text; } }).catch(function(){});
+  setTimeout(function(){ document.getElementById('postit-input').focus(); }, 80);
+  // versione fresca dal server in bg (ridisegna solo se cambiata)
+  var before=JSON.stringify(postit);
+  apiGet({ action:'getNote' }).then(function(d){
+    if(d&&d.items){ postit={ color:d.color||postit.color, items:d.items }; _savePostitLocal();
+      if(JSON.stringify(postit)!==before && !document.getElementById('postit-modal').classList.contains('hidden')){
+        document.documentElement.style.setProperty('--postit', postit.color); renderPostit();
+      }
+    }
+  }).catch(function(){});
 }
+function closePostit(){ document.getElementById('postit-modal').classList.add('hidden'); }
 function setPostitColor(c){ postit.color=c; document.documentElement.style.setProperty('--postit',c); _savePostitLocal(); _pushNote(); }
-function closePostit(){
-  postit.text=document.getElementById('postit-text').value;
-  _savePostitLocal(); _pushNote();
-  document.getElementById('postit-modal').classList.add('hidden');
+
+// ordina: prima i non fatti, poi i fatti (in fondo, come traccia)
+function _piOrdered(){
+  var todo=postit.items.filter(function(i){return !i.done;});
+  var done=postit.items.filter(function(i){return i.done;});
+  return todo.concat(done);
 }
-function _pushNote(){ apiPost({ action:'setNote', note:{ text:postit.text, color:postit.color } }).catch(function(e){ console.warn('note bg:',e.message); }); }
+function renderPostit(){
+  var list=document.getElementById('postit-list');
+  if(!postit.items.length){ list.innerHTML='<div style="opacity:.45;font-style:italic;padding:10px 2px">Niente ancora. Scrivi sopra e premi invio.</div>'; return; }
+  list.innerHTML = _piOrdered().map(function(it){
+    return '<div class="pi-item'+(it.done?' done':'')+'" data-id="'+it.id+'">'
+      +'<span class="pi-check" data-act="toggle"></span>'
+      +'<span class="pi-text" data-act="tap">'+_esc(it.text)+'</span>'
+      +'<span class="pi-del">🗑</span></div>';
+  }).join('');
+  Array.prototype.forEach.call(list.querySelectorAll('.pi-item'), _wirePiItem);
+}
+function addPostitItem(text){
+  text=text.trim(); if(!text) return;
+  postit.items.unshift({ id:'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), text:text, done:false });
+  _savePostitLocal(); renderPostit(); _pushNote();
+}
+document.getElementById('postit-input').addEventListener('keydown', function(e){
+  if(e.key==='Enter'){ e.preventDefault(); addPostitItem(this.value); this.value=''; }
+});
+
+// item: tap su check = toggle fatto; tap su testo = modal scelta; swipe sx = elimina (se fatto)
+function _wirePiItem(el){
+  var id=el.getAttribute('data-id');
+  el.addEventListener('click', function(ev){
+    var act=ev.target.getAttribute('data-act');
+    if(act==='toggle') piToggle(id);
+    else if(act==='tap') piOpenChoice(id);
+  });
+  // swipe-to-delete (solo orizzontale)
+  var x0=null,sw=false;
+  el.addEventListener('touchstart', function(e){ x0=e.touches[0].clientX; sw=false; }, {passive:true});
+  el.addEventListener('touchmove', function(e){
+    if(x0===null) return; var dx=e.touches[0].clientX-x0;
+    if(dx<-10){ sw=true; el.classList.add('swiping'); el.style.transform='translateX('+Math.max(dx,-90)+'px)';
+      el.querySelector('.pi-del').style.opacity=Math.min(1,-dx/70); }
+  }, {passive:true});
+  el.addEventListener('touchend', function(e){
+    if(sw){ var dx=e.changedTouches[0].clientX-x0;
+      if(dx<-60){ piDelete(id); return; }
+      el.style.transform=''; el.querySelector('.pi-del').style.opacity=0; }
+    x0=null;
+  }, {passive:true});
+}
+function _piFind(id){ return postit.items.filter(function(i){return i.id===id;})[0]; }
+function piToggle(id){ var it=_piFind(id); if(!it) return; it.done=!it.done; _savePostitLocal(); renderPostit(); _pushNote(); }
+function piDelete(id){ postit.items=postit.items.filter(function(i){return i.id!==id;}); _savePostitLocal(); renderPostit(); _pushNote(); }
+
+// ---- modal scelta su item ----
+var piChoiceId=null;
+function piOpenChoice(id){
+  var it=_piFind(id); if(!it) return;
+  piChoiceId=id;
+  document.getElementById('pi-choice-text').textContent=it.text;
+  document.getElementById('pi-choice').classList.remove('hidden');
+}
+function piCloseChoice(){ document.getElementById('pi-choice').classList.add('hidden'); piChoiceId=null; }
+function piMarkDone(){ var it=_piFind(piChoiceId); if(it){ it.done=true; _savePostitLocal(); renderPostit(); _pushNote(); } piCloseChoice(); }
+function piToAgenda(){
+  var it=_piFind(piChoiceId); if(!it){ piCloseChoice(); return; }
+  var pendingId=it.id;
+  piCloseChoice(); closePostit();
+  // apre editor nuovo evento di OGGI col "cosa?" precompilato; l'item sparisce SOLO se salvo
+  openEditor();
+  state.anchor=_todayISO();
+  document.getElementById('ed-title').value=it.text;
+  // memorizza quale item rimuovere dopo il salvataggio
+  state.fromPostitId=pendingId;
+}
 
 // ====== TRACKING (report a fasce + voti) ======
 // fasce: devono combaciare con TRK_SLOTS del backend
