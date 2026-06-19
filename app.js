@@ -187,8 +187,7 @@ function _setView(v){
   Array.prototype.forEach.call(document.querySelectorAll('.vbtn'),function(b){ b.classList.toggle('active', b.getAttribute('data-view')===v); });
   render();
 }
-document.getElementById('nav-prev').onclick=function(){ _shiftAnchor(-1); };
-document.getElementById('nav-next').onclick=function(){ _shiftAnchor(1); };
+// (frecce rimosse: navigazione tra date solo via swipe)
 Array.prototype.forEach.call(document.querySelectorAll('.vbtn'),function(b){ b.onclick=function(){ _setView(b.getAttribute('data-view')); }; });
 
 // ====== SWIPE orizzontale per navigare (avanti/indietro nella vista) ======
@@ -303,6 +302,127 @@ function closePostit(){
   document.getElementById('postit-modal').classList.add('hidden');
 }
 function _pushNote(){ apiPost({ action:'setNote', note:{ text:postit.text, color:postit.color } }).catch(function(e){ console.warn('note bg:',e.message); }); }
+
+// ====== TRACKING (report a fasce + voti) ======
+// fasce: devono combaciare con TRK_SLOTS del backend
+var TK_SLOTS = ['06:00-08:30','08:30-15:00','15:00-16:00','16:00-17:00','17:00-19:00','19:00-21:00','21:00-24:00'];
+var tkState = { date:null, bySlot:{} };
+
+// la fascia è "passata" se l'ora di FINE è già trascorsa (solo per oggi; giorni passati = tutte passate)
+function _slotEnd(slot){ var h=slot.split('-')[1].split(':'); return (+h[0])*60+(+h[1]); }
+function _isPast(slot, date){
+  if(date < _todayISO()) return true;
+  if(date > _todayISO()) return false;
+  var now=new Date(); return (now.getHours()*60+now.getMinutes()) >= _slotEnd(slot);
+}
+
+function openTracking(){
+  tkState.date = state.anchor;
+  document.getElementById('tracking').classList.remove('hidden');
+  renderTracking();
+  apiGet({ action:'getTracking', date:tkState.date }).then(function(d){
+    tkState.bySlot={}; (d&&d.entries||[]).forEach(function(e){ tkState.bySlot[e.slot]=e; });
+    renderTracking();
+  }).catch(function(e){ console.warn('tracking get bg:',e.message); });
+}
+function closeTracking(){ document.getElementById('tracking').classList.add('hidden'); }
+
+function renderTracking(){
+  var p=tkState.date.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
+  var oggi = tkState.date===_todayISO();
+  document.getElementById('tk-title').innerHTML = '<span>'+d.getDate()+' '+MESI[d.getMonth()].toUpperCase()+'</span><span class="sub">'+(oggi?'i voti di oggi':'voti del giorno')+'</span>';
+  var html='';
+  TK_SLOTS.forEach(function(slot){
+    var rec=tkState.bySlot[slot];
+    var past=_isPast(slot, tkState.date);
+    if(rec && (rec.pleasure!=null || rec.utility!=null || rec.activity)){
+      var votes='';
+      if(rec.pleasure!=null) votes+='<span class="tk-v p">'+emojiP(rec.pleasure)+' '+rec.pleasure+'</span>';
+      if(rec.utility!=null)  votes+='<span class="tk-v u">'+emojiU(rec.utility)+' '+rec.utility+'</span>';
+      html+='<div class="tk-slot" onclick="openRate(\''+slot+'\')"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act">'+_esc(rec.activity||'(senza nota)')+'</div><div class="tk-votes">'+votes+'</div></div>';
+    } else if(past){
+      html+='<div class="tk-slot" onclick="openRate(\''+slot+'\')"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act empty">da votare…</div><div class="tk-votes"><span class="tk-add">+</span></div></div>';
+    } else {
+      html+='<div class="tk-slot future"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act empty">— non ancora</div></div>';
+    }
+  });
+  document.getElementById('tk-slots').innerHTML=html;
+}
+
+function emojiP(v){ return v<=2?'💀':v<=4?'😩':v<=6?'😐':v<=8?'😎':'🔥'; }
+function emojiU(v){ return v<=2?'🗑️':v<=4?'🤏':v<=6?'👍':v<=8?'💪':'🚀'; }
+
+// ====== MODAL 3-STEP (lazy) ======
+var rateState = { slot:null, step:1, timer:null, rec:null };
+function openRate(slot){
+  rateState.slot=slot; rateState.step=1;
+  rateState.rec = tkState.bySlot[slot] || { date:tkState.date, slot:slot, activity:'', pleasure:null, utility:null };
+  document.getElementById('rate-slot').textContent = slot.replace('-',' – ');
+  document.getElementById('rate-act').value = rateState.rec.activity||'';
+  document.getElementById('rate-pleasure').value = rateState.rec.pleasure||5;
+  document.getElementById('rate-utility').value = rateState.rec.utility||5;
+  _rateShowStep(1);
+  document.getElementById('rate').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('rate-act').focus(); }, 80);
+}
+function _rateShowStep(n){
+  rateState.step=n;
+  [1,2,3].forEach(function(i){ document.getElementById('rate-step'+i).classList.toggle('hidden', i!==n); });
+  var dots=document.querySelectorAll('.rate-dots .rd');
+  dots.forEach(function(dt,i){ dt.classList.toggle('on', i<n); });
+  _rateProg(0);
+  if(n===2){ _rateEmoji('p'); }
+  if(n===3){ _rateEmoji('u'); }
+}
+function _rateEmoji(which){
+  if(which==='p'){ var v=+document.getElementById('rate-pleasure').value; document.getElementById('rate-pleasure-val').textContent=v; document.getElementById('rate-emoji-p').textContent=emojiP(v); }
+  else { var u=+document.getElementById('rate-utility').value; document.getElementById('rate-utility-val').textContent=u; document.getElementById('rate-emoji-u').textContent=emojiU(u); }
+}
+// barra di avanzamento (riempie in 2s; a fine → step successivo)
+function _rateProg(reset){
+  var bar=document.getElementById('rate-prog-bar');
+  if(rateState.timer){ clearTimeout(rateState.timer); rateState.timer=null; }
+  bar.style.transition='none'; bar.style.width='0%';
+  if(reset) return; // step1: nessun auto-avanzamento (si avanza con Invio)
+}
+function _rateArm(){
+  // chiamata a ogni movimento slider: resetta e riavvia il conto di 2s
+  var bar=document.getElementById('rate-prog-bar');
+  if(rateState.timer) clearTimeout(rateState.timer);
+  bar.style.transition='none'; bar.style.width='0%';
+  void bar.offsetWidth; // reflow
+  bar.style.transition='width 2s linear'; bar.style.width='100%';
+  rateState.timer=setTimeout(function(){ _rateAdvance(); }, 2000);
+}
+function _rateAdvance(){
+  if(rateState.step===2){ rateState.rec.pleasure=+document.getElementById('rate-pleasure').value; _rateShowStep(3); }
+  else if(rateState.step===3){ rateState.rec.utility=+document.getElementById('rate-utility').value; _rateSaveClose(); }
+}
+function _rateSaveClose(){
+  if(rateState.timer) clearTimeout(rateState.timer);
+  var rec=rateState.rec;
+  tkState.bySlot[rec.slot]=rec;                 // UI subito
+  document.getElementById('rate').classList.add('hidden');
+  renderTracking();
+  apiPost({ action:'setTracking', rec:rec }).then(function(saved){ if(saved){ tkState.bySlot[saved.slot]=saved; } }).catch(function(e){ console.warn('tracking save bg:',e.message); });
+}
+// wiring eventi del modal rate
+document.getElementById('rate-act').addEventListener('keydown', function(e){
+  if(e.key==='Enter'){ e.preventDefault(); rateState.rec.activity=this.value.trim(); _rateShowStep(2); _rateArm(); }
+});
+document.getElementById('rate-pleasure').addEventListener('input', function(){ _rateEmoji('p'); _rateArm(); });
+document.getElementById('rate-utility').addEventListener('input', function(){ _rateEmoji('u'); _rateArm(); });
+// chiusura tappando lo sfondo: conferma se incompleto
+document.getElementById('rate').addEventListener('click', function(e){
+  if(e.target!==this) return; // solo click sullo sfondo
+  if(rateState.timer) clearTimeout(rateState.timer);
+  var partial = (rateState.step<3) || rateState.rec.utility==null;
+  if(partial){ if(!confirm('Salvare quello che hai messo finora?')){ document.getElementById('rate').classList.add('hidden'); return; } }
+  if(rateState.step>=2) rateState.rec.pleasure=+document.getElementById('rate-pleasure').value;
+  if(rateState.step>=3) rateState.rec.utility=+document.getElementById('rate-utility').value;
+  rateState.rec.activity=document.getElementById('rate-act').value.trim();
+  _rateSaveClose();
+});
 
 // ====== service worker (PWA) ======
 if ('serviceWorker' in navigator) {

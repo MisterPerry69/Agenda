@@ -24,10 +24,11 @@
 
   <div id="app" class="app hidden">
     <div class="page" id="page">
+      <!-- bookmark rosso: apre il tracking del giorno corrente -->
+      <button id="bookmark" class="bookmark" onclick="openTracking()" title="Voti del giorno">🔖</button>
+
       <header class="ag-head">
         <div id="ag-title" class="ag-title">—</div>
-        <button id="nav-prev" class="nav-btn">‹</button>
-        <button id="nav-next" class="nav-btn">›</button>
       </header>
 
       <main id="ag-body" class="ag-body"></main>
@@ -67,6 +68,47 @@
         <button class="postit-close" onclick="closePostit()">✕</button>
       </div>
       <textarea id="postit-text" placeholder="Scrivi quel che vuoi…"></textarea>
+    </div>
+  </div>
+
+  <!-- VISTA TRACKING (report del giorno a fasce) -->
+  <div id="tracking" class="tracking hidden">
+    <div class="tk-page" id="tk-page">
+      <header class="tk-head">
+        <div id="tk-title" class="tk-title">—</div>
+        <button class="tk-close" onclick="closeTracking()">✕</button>
+      </header>
+      <div class="tk-rule"></div>
+      <div id="tk-slots" class="tk-slots"></div>
+    </div>
+  </div>
+
+  <!-- MODAL 3-STEP (lazy) -->
+  <div id="rate" class="rate hidden">
+    <div class="rate-card">
+      <div id="rate-slot" class="rate-slot">—</div>
+      <div class="rate-dots"><span class="rd"></span><span class="rd"></span><span class="rd"></span></div>
+
+      <div id="rate-step1" class="rate-step">
+        <div class="rate-q">Cosa hai fatto?</div>
+        <input id="rate-act" class="rate-input" placeholder="scrivi e premi invio…">
+      </div>
+
+      <div id="rate-step2" class="rate-step hidden">
+        <div class="rate-q">Quanto è stato <b>piacevole</b>?</div>
+        <div id="rate-emoji-p" class="rate-emoji">😐</div>
+        <input id="rate-pleasure" class="rate-slider" type="range" min="1" max="10" value="5">
+        <div class="rate-scale"><span>1</span><span id="rate-pleasure-val" class="rate-val">5</span><span>10</span></div>
+      </div>
+
+      <div id="rate-step3" class="rate-step hidden">
+        <div class="rate-q">Quanto è stato <b>utile</b>?</div>
+        <div id="rate-emoji-u" class="rate-emoji">👍</div>
+        <input id="rate-utility" class="rate-slider" type="range" min="1" max="10" value="5">
+        <div class="rate-scale"><span>1</span><span id="rate-utility-val" class="rate-val">5</span><span>10</span></div>
+      </div>
+
+      <div class="rate-prog"><div id="rate-prog-bar" class="rate-prog-bar"></div></div>
     </div>
   </div>
 
