@@ -408,7 +408,7 @@ function _rateSaveClose(){
 }
 // wiring eventi del modal rate
 document.getElementById('rate-act').addEventListener('keydown', function(e){
-  if(e.key==='Enter'){ e.preventDefault(); rateState.rec.activity=this.value.trim(); _rateShowStep(2); _rateArm(); }
+  if(e.key==='Enter'){ e.preventDefault(); rateState.rec.activity=this.value.trim(); _rateShowStep(2); /* niente _rateArm: il timer parte solo quando muovi lo slider */ }
 });
 document.getElementById('rate-pleasure').addEventListener('input', function(){ _rateEmoji('p'); _rateArm(); });
 document.getElementById('rate-utility').addEventListener('input', function(){ _rateEmoji('u'); _rateArm(); });
