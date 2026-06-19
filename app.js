@@ -1,6 +1,6 @@
 // ====== CONFIG ======
 // URL del Web App di Apps Script (deve finire con /exec). Vedi README per il deploy.
-var SCRIPT_URL = 'INCOLLA_QUI_URL_WEBAPP_EXEC';
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyfK9M2FA9oI-iCyUyCKg5aJZu6bK1V5lz5YcyQ3CoAXmksEGBXN3Wqm8kRMEMONvio/exec';
 
 var CATS = ['lavoro','casa','libero','cazzeggio'];
 var POSTIT_COLORS = ['#ff93cf','#fff04d','#84d2ff','#a7ef5e','#ffb27a'];
