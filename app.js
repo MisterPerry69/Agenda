@@ -58,12 +58,9 @@ function boot(){
   var y = new Date().getFullYear();
   syncRange((y-1)+'-12-01', (y+1)+'-01-31');
 }
-var DIAG = { lastSync:'mai', lastErr:'', url:'' };
 function syncRange(from,to){
-  DIAG.url = SCRIPT_URL;
   apiGet({ action:'getAgenda', from:from, to:to })
     .then(function(rows){
-      DIAG.lastSync = (rows?rows.length:0)+' voci @ '+new Date().toLocaleTimeString(); DIAG.lastErr='';
       // rimpiazza le voci dell'intervallo con quelle del server,
       // MA conserva quelle ancora "pending" (scrittura non confermata).
       var keep = cache.entries.filter(function(e){
@@ -74,18 +71,7 @@ function syncRange(from,to){
       cache.loadedAt = Date.now(); _saveCache();
       render();
     })
-    .catch(function(e){ DIAG.lastErr = e.message; DIAG.lastSync='ERRORE @ '+new Date().toLocaleTimeString(); console.warn('sync fallita (uso cache):', e.message); });
-}
-
-// Pannello diagnostico: tocca il TITOLO per vederlo (utile per capire problemi mobile).
-function showDiag(){
-  var msg = 'URL backend:\n'+(DIAG.url||'(vuoto!)')+'\n\n'
-    +'Ultimo sync: '+DIAG.lastSync+'\n'
-    +(DIAG.lastErr ? 'Errore: '+DIAG.lastErr+'\n' : '')
-    +'\nVoci in cache: '+cache.entries.length
-    +'\nPending: '+cache.pending.length
-    +'\nOggi: '+_todayISO();
-  alert(msg);
+    .catch(function(e){ console.warn('sync fallita (uso cache):', e.message); });
 }
 
 // ====== RANGE / TITOLI ======
@@ -203,7 +189,6 @@ function _setView(v){
 }
 document.getElementById('nav-prev').onclick=function(){ _shiftAnchor(-1); };
 document.getElementById('nav-next').onclick=function(){ _shiftAnchor(1); };
-document.getElementById('ag-title').onclick=function(){ showDiag(); };
 Array.prototype.forEach.call(document.querySelectorAll('.vbtn'),function(b){ b.onclick=function(){ _setView(b.getAttribute('data-view')); }; });
 
 // ====== SWIPE orizzontale per navigare (avanti/indietro nella vista) ======

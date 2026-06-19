@@ -51,7 +51,7 @@ body{
 
 /* ===================== PAGINA (quaderno su scuro) ===================== */
 .app{
-  position:relative; min-height:100vh; padding:14px 10px;
+  position:fixed; inset:0; padding:14px 10px;
   background:var(--bg-dark);
   display:flex; flex-direction:column;
 }
@@ -99,6 +99,7 @@ body{
   animation:riseIn .35s ease both;
 }
 .ag-line:active{ background:rgba(0,0,0,.04); }
+.ag-line:last-child{ border-image:none; border-bottom-color:transparent; }
 
 /* checkbox scarabocchiato (SVG) */
 .ag-check{
@@ -149,15 +150,15 @@ body{
 .vbtn{
   position:relative; font-family:'Patrick Hand',cursive; font-weight:700; font-size:17px;
   letter-spacing:.5px; color:var(--ink-soft); background:none; border:none; cursor:pointer;
-  padding:8px 6px; text-transform:uppercase;
+  padding:10px 14px; text-transform:uppercase;
 }
-.vbtn.active{ color:var(--ink); }
-/* cerchio attivo barra: circle.png (NERO, ovale ~300x140) che Ale caricherà.
-   Sotto, fallback SVG nero così funziona già senza il PNG. */
-.vbtn.active::after{
-  content:""; position:absolute; left:-12px; right:-12px; top:-7px; bottom:-7px; z-index:-1;
+/* cerchio attivo: usato come BACKGROUND del bottone (dietro al testo per natura).
+   circle.png NERO ovale ~300x140 che Ale caricherà; sotto fallback SVG nero.
+   NB: niente z-index negativo (nasconderebbe dietro la pagina). */
+.vbtn.active{
+  color:var(--ink);
   background:no-repeat center/100% 100% url("circle.png"),
-            no-repeat center/100% 100% url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 50' preserveAspectRatio='none'%3E%3Cpath d='M55,4 C95,3 105,14 104,25 C103,40 80,47 52,46 C22,45 5,38 6,24 C7,11 25,5 58,5' stroke='%231a1a1a' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+            no-repeat center/108% 116% url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 50' preserveAspectRatio='none'%3E%3Cpath d='M55,4 C95,3 105,14 104,25 C103,40 80,47 52,46 C22,45 5,38 6,24 C7,11 25,5 58,5' stroke='%231a1a1a' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
 /* ===================== EDITOR VOCE ===================== */
