@@ -68,7 +68,7 @@ body{
 /* intestazione data — fissa (non scrolla) */
 .ag-head{ position:relative; flex-shrink:0; margin-bottom:18px; padding-bottom:12px; }
 .ag-title{
-  font-family:'Gochi Hand', cursive; font-size:clamp(26px,8vw,34px);
+  font-family:'Patrick Hand', cursive; font-size:clamp(26px,8vw,34px);
   letter-spacing:1px; color:var(--ink); line-height:1;
 }
 .ag-title .dow{
@@ -128,12 +128,13 @@ body{
 
 .ag-empty{ text-align:center; color:var(--ink-soft); padding:60px 20px; font-size:19px; }
 
-/* ===================== POST-IT (quadrato basso sx) ===================== */
+/* ===================== POST-IT BTN (linguetta basso-sx) ===================== */
+/* figlio di .app: ancorato a left:0 del viewport, sbordando dal bordo sx della pagina.
+   stretto e alto, come una linguetta che esce dal quaderno. */
 .note-btn{
-  position:absolute; left:0; bottom:104px; width:44px; height:52px; z-index:6;
+  position:absolute; left:0; bottom:120px; width:34px; height:72px; z-index:6;
   background:var(--postit, var(--hl-pink)); border:0; cursor:pointer;
-  border-radius:0 6px 6px 0; box-shadow:2px 3px 0 rgba(0,0,0,.22);
-  display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--ink);
+  border-radius:0 7px 7px 0; box-shadow:none; padding:0;
 }
 
 /* ===================== BARRA VISTE (in basso) ===================== */
@@ -174,7 +175,7 @@ body{
   background:transparent; border:none; border-bottom:2px solid #d8d2c0; padding:10px 2px; margin-bottom:14px;
 }
 .ed-input:focus{ outline:none; border-bottom-color:var(--ink); }
-#ed-title{ font-family:'Gochi Hand',cursive; font-size:22px; }
+#ed-title{ font-family:'Patrick Hand',cursive; font-size:22px; }
 .ed-cats{ display:flex; gap:10px; flex-wrap:wrap; margin:4px 0 18px; }
 .ed-cat{ position:relative; font-family:'Patrick Hand',cursive; font-size:15px; color:var(--ink);
   background:none; border:none; cursor:pointer; padding:3px 8px; }
@@ -201,13 +202,12 @@ body{
 #ed-save{ background:var(--ink); color:var(--paper); }
 
 /* ===================== MODAL POST-IT ===================== */
-/* sfora leggermente a destra (come il bookmark sfora in alto), alto e stretto, niente ombra */
-.postit-modal{ position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:flex-start;
-  background:rgba(20,18,16,.55); animation:riseIn .18s ease; }
+.postit-modal{ position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
+  background:rgba(20,18,16,.55); padding:18px; animation:riseIn .18s ease; }
 .postit{
-  width:84%; max-width:330px; height:88vh; margin-left:-10px; background:var(--postit, var(--hl-pink));
-  border-radius:0 4px 4px 0; box-shadow:none;
-  display:flex; flex-direction:column; padding:20px 18px; animation:popIn .26s ease;
+  width:100%; max-width:360px; height:70vh; background:var(--postit, var(--hl-pink));
+  border-radius:3px; box-shadow:0 16px 40px rgba(0,0,0,.4); transform:rotate(-1deg);
+  display:flex; flex-direction:column; padding:18px; animation:popIn .26s ease;
 }
 .postit-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .postit-colors{ display:flex; gap:8px; }
@@ -216,7 +216,7 @@ body{
 .postit-input{
   width:100%; border:none; background:transparent; outline:none; flex-shrink:0;
   border-bottom:2px solid rgba(0,0,0,.25); padding:6px 2px; margin-bottom:8px;
-  font-family:'Gochi Hand',cursive; font-size:20px; color:var(--ink);
+  font-family:'Patrick Hand',cursive; font-size:20px; color:var(--ink);
 }
 .postit-input::placeholder{ color:rgba(0,0,0,.4); }
 .postit-list{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
@@ -238,7 +238,7 @@ body{
 .pi-choice-card{ width:100%; max-width:360px; background:var(--paper); border-radius:18px; padding:18px;
   box-shadow:0 16px 40px rgba(0,0,0,.4); animation:popIn .22s ease;
   background-image:radial-gradient(var(--dot) 1.0px,transparent 1.3px); background-size:19px 19px; }
-.pi-choice-text{ width:100%; font-family:'Gochi Hand',cursive; font-size:20px; color:var(--ink); text-align:center;
+.pi-choice-text{ width:100%; font-family:'Patrick Hand',cursive; font-size:20px; color:var(--ink); text-align:center;
   margin:4px 0 16px; padding:4px 4px 10px; border:none; border-bottom:2px solid var(--paper-edge,#d8d2c0); background:transparent; }
 .pi-choice-text:focus{ outline:none; border-bottom-color:var(--ink); }
 .pi-btn{ display:block; width:100%; font-family:'Patrick Hand',cursive; font-size:17px; cursor:pointer;
@@ -248,7 +248,7 @@ body{
 
 /* ===================== VISTA SETTIMANA ===================== */
 .wk-block{ margin-bottom:14px; animation:riseIn .3s ease both; }
-.wk-day{ font-family:'Gochi Hand',cursive; font-size:18px; color:var(--ink);
+.wk-day{ font-family:'Patrick Hand',cursive; font-size:18px; color:var(--ink);
   border-bottom:2px solid var(--ink); padding-bottom:3px; margin-bottom:5px; cursor:pointer; }
 .wk-block.today .wk-day{ color:var(--red); }
 .wk-item{ font-size:17px; padding:4px 6px; position:relative; cursor:pointer; display:inline-block; }
@@ -292,10 +292,10 @@ body{
 .mo-ev span{ position:relative; z-index:1; }
 
 /* ===================== BOOKMARK (apre tracking) ===================== */
+/* figlio di .app: ancorato a top:0 del viewport → sborda verso l'alto oltre il bordo della pagina */
 .bookmark{
-  position:absolute; top:-2px; right:20px; width:36px; height:50px; z-index:7; border:none; cursor:pointer;
-  background:var(--red); color:#fff; font-size:17px; padding:0 0 8px;
-  display:flex; align-items:flex-start; justify-content:center;
+  position:absolute; top:0; right:28px; width:38px; height:62px; z-index:7; border:none; cursor:pointer;
+  background:var(--red); color:#fff; font-size:17px; padding:0;
   clip-path:polygon(0 0,100% 0,100% 100%,50% 80%,0 100%);
   box-shadow:1px 2px 4px rgba(0,0,0,.35);
 }
@@ -311,7 +311,7 @@ body{
   padding:24px 20px 18px; overflow:hidden;
 }
 .tk-head{ position:relative; flex-shrink:0; display:flex; align-items:baseline; justify-content:space-between; }
-.tk-title{ font-family:'Gochi Hand',cursive; font-size:clamp(22px,7vw,30px); color:var(--ink); }
+.tk-title{ font-family:'Patrick Hand',cursive; font-size:clamp(22px,7vw,30px); color:var(--ink); }
 .tk-title .sub{ font-family:'Patrick Hand',cursive; font-size:14px; color:var(--ink-soft); margin-left:8px; }
 .tk-close{ background:none; border:none; font-family:'Patrick Hand',cursive; font-size:24px; color:var(--ink-soft); cursor:pointer; }
 .tk-rule{ flex-shrink:0; height:9px; margin:6px 0 8px;
@@ -347,7 +347,7 @@ body{
 .rate-dots .rd.on{ background:var(--red); }
 .rate-step{ padding:6px 0; }
 .rate-q{ font-size:21px; margin:10px 0 6px; }
-.rate-input{ width:100%; font-family:'Gochi Hand',cursive; font-size:20px; text-align:center; color:var(--ink);
+.rate-input{ width:100%; font-family:'Patrick Hand',cursive; font-size:20px; text-align:center; color:var(--ink);
   background:transparent; border:none; border-bottom:2px solid #d8d2c0; padding:10px 4px; }
 .rate-input:focus{ outline:none; border-bottom-color:var(--ink); }
 .rate-emoji{ font-size:52px; margin:8px 0; line-height:1; }

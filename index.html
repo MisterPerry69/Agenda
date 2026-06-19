@@ -12,7 +12,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&family=Gochi+Hand&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -23,18 +23,16 @@
   </div>
 
   <div id="app" class="app hidden">
-    <div class="page" id="page">
-      <!-- bookmark rosso: apre il tracking del giorno corrente -->
-      <button id="bookmark" class="bookmark" onclick="openTracking()" title="Voti del giorno"></button>
+    <!-- bookmark e post-it stanno FUORI da .page così possono sbordare dai bordi -->
+    <button id="bookmark" class="bookmark" onclick="openTracking()" title="Voti del giorno"></button>
+    <button id="note-btn" class="note-btn" onclick="openPostit()"></button>
 
+    <div class="page" id="page">
       <header class="ag-head">
         <div id="ag-title" class="ag-title">—</div>
       </header>
 
       <main id="ag-body" class="ag-body"></main>
-
-      <!-- post-it: quadrato in basso a sinistra -->
-      <button id="note-btn" class="note-btn" onclick="openPostit()"></button>
 
       <!-- barra viste in basso -->
       <nav class="view-switch">
