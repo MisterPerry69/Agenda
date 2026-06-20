@@ -132,10 +132,12 @@ body{
 /* figlio di .app: ancorato a left:0 del viewport, sbordando dal bordo sx della pagina.
    stretto e alto, come una linguetta che esce dal quaderno. */
 .note-btn{
-  position:absolute; left:5px; bottom:120px; width:34px; height:72px; z-index:6;
+  position:absolute; left:5px; bottom:120px; width:34px; height:72px; z-index:7;
   background:var(--postit, var(--hl-pink)); border:0; cursor:pointer;
-  border-radius:0 7px 7px 0; box-shadow:none; padding:0;
+  border-radius:0 7px 7px 0; padding:0;
+  box-shadow:2px 2px 4px rgba(0,0,0,.18);   /* ombretta leggera */
 }
+.note-btn:active{ transform:translateY(1px); }
 
 /* ===================== BARRA VISTE (in basso) ===================== */
 .view-switch{
@@ -232,24 +234,26 @@ body{
 .pi-item .pi-del{ position:absolute; right:8px; top:50%; transform:translateY(-50%); color:var(--red); font-size:18px; opacity:0; transition:opacity .15s; }
 .pi-item.swiping{ transition:transform .15s; }
 
-/* ---- liste usa-e-getta: linguette impilate sopra al note-btn ---- */
-.temp-tabs{
-  position:absolute; left:5px; bottom:196px; z-index:6;   /* 120 (note-btn) + 72 (altezza) + 4 di stacco */
-  display:flex; flex-direction:column-reverse; gap:5px;
-}
+/* ---- liste usa-e-getta: linguette GRANDI come il note-btn, dietro e impilate sotto ----
+   stessa posizione/forma del main ma z-index più basso e spinte in basso così
+   "spuntano" da sotto al post-it main (come da screenshot). */
+.temp-tabs{ position:absolute; left:5px; bottom:120px; width:34px; height:72px; z-index:4; }
 .temp-tab{
-  width:34px; height:30px; border:0; cursor:pointer; padding:0; position:relative;
-  border-radius:0 7px 7px 0;
+  position:absolute; left:0; width:34px; height:72px; border:0; cursor:pointer; padding:0;
+  border-radius:0 9px 9px 0;
   /* foglio a quadretti azzurrino, distinto dal post-it giallo/rosa */
   background:
-    repeating-linear-gradient(#bfe0ff00 0 6px, #8fc4ee44 6px 6.5px),
-    repeating-linear-gradient(90deg,#bfe0ff00 0 6px, #8fc4ee44 6px 6.5px),
+    repeating-linear-gradient(#bfe0ff00 0 7px, #8fc4ee55 7px 7.6px),
+    repeating-linear-gradient(90deg,#bfe0ff00 0 7px, #8fc4ee55 7px 7.6px),
     #eaf4ff;
-  box-shadow:1px 1px 3px rgba(0,0,0,.25);
+  box-shadow:2px 2px 4px rgba(0,0,0,.18);   /* ombretta leggera */
 }
+/* ogni linguetta peeking sotto la precedente: -28px = quanto spuntano da sotto al main */
+.temp-tab:nth-child(1){ bottom:-28px; z-index:5; }
+.temp-tab:nth-child(2){ bottom:-54px; z-index:4; }
 .temp-tab-n{
-  position:absolute; right:4px; top:50%; transform:translateY(-50%);
-  font-family:'Patrick Hand',cursive; font-size:13px; color:#2b6da3; font-weight:700;
+  position:absolute; left:0; right:6px; bottom:5px;
+  font-family:'Patrick Hand',cursive; font-size:13px; color:#2b6da3; font-weight:700; text-align:center;
 }
 
 /* ---- aspetto "lista al volo" del modal (foglio a quadretti strappato) ---- */
@@ -272,15 +276,9 @@ body{
 .postit.temp .punch-r{ right:28%; }
 .postit.temp .postit-input{ margin-top:6px; }
 
-.postit-hint{
-  flex-shrink:0; text-align:center; font-family:'Patrick Hand',cursive; font-size:13px;
-  color:rgba(0,0,0,.35); padding-top:6px; font-style:italic;
-}
-.postit.temp .postit-hint{ display:none; }   /* nei temp lo swipe non crea nulla */
-
-/* feedback "max raggiunto" */
-.postit.shake{ animation:shake .35s ease; }
-@keyframes shake{ 0%,100%{transform:rotate(-1deg)} 25%{transform:rotate(-1deg) translateX(-7px)} 75%{transform:rotate(-1deg) translateX(7px)} }
+/* feedback "max raggiunto" sul note-btn */
+.note-btn.shake{ animation:nbShake .35s ease; }
+@keyframes nbShake{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
 
 /* ---- BURN: il foglio si consuma dal basso verso l'alto ---- */
 .burn-edge{ display:none; }
@@ -372,7 +370,7 @@ body{
   position:absolute; top:8px; right:28px; width:38px; height:62px; z-index:7; border:none; cursor:pointer;
   background:var(--red); color:#fff; font-size:17px; padding:0;
   clip-path:polygon(0 0,100% 0,100% 100%,50% 80%,0 100%);
-  box-shadow:1px 2px 4px rgba(0,0,0,.35);
+  box-shadow:1px 2px 4px rgba(0,0,0,.18);   /* ombretta leggera */
 }
 .bookmark:active{ transform:translateY(1px); }
 /* fasce arretrate non votate: il bookmark pulsa e mostra un pallino col numero */

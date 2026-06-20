@@ -415,33 +415,21 @@ document.getElementById('postit-input').addEventListener('keydown', function(e){
   if(e.key==='Enter'){ e.preventDefault(); addPostitItem(this.value); this.value=''; }
 });
 
-// SWIPE A DESTRA sul post-it (solo dal MAIN) → crea una lista usa-e-getta.
-// Gesto orizzontale chiaro per non confliggere con lo scroll verticale della lista.
+// Il post-it BTN (note-btn): TAP singolo apre il main, DOPPIO TAP crea una lista al volo.
+// Niente swipe (le gesture laterali del telefono lo intercetterebbero).
 (function(){
-  var box=document.getElementById('postit');
-  var x0=null,y0=null,horiz=false;
-  box.addEventListener('touchstart', function(e){ x0=e.touches[0].clientX; y0=e.touches[0].clientY; horiz=false; }, {passive:true});
-  box.addEventListener('touchmove', function(e){
-    if(x0===null) return;
-    var dx=e.touches[0].clientX-x0, dy=e.touches[0].clientY-y0;
-    if(!horiz && Math.abs(dx)>14 && Math.abs(dx)>Math.abs(dy)*1.6) horiz=true;
-    if(horiz && dx>0 && activePostit==='main'){ box.style.transform='rotate(-1deg) translateX('+Math.min(dx,70)+'px)'; }
-  }, {passive:true});
-  box.addEventListener('touchend', function(e){
-    if(horiz && activePostit==='main'){
-      var dx=e.changedTouches[0].clientX-x0;
-      box.style.transform='';
-      if(dx>70){
-        if(!_createTemp()){ box.classList.add('shake'); setTimeout(function(){ box.classList.remove('shake'); },350); }
-      }
-    }
-    x0=null;y0=null;horiz=false;
-  }, {passive:true});
+  var btn=document.getElementById('note-btn');
+  if(!btn) return;
+  btn.removeAttribute('onclick');   // gestiamo noi tap vs doppio-tap
+  var lastTap=0, timer=null;
+  function single(){ openPostit(); }
+  function double(){ if(!_createTemp()){ btn.classList.add('shake'); setTimeout(function(){ btn.classList.remove('shake'); },350); } }
+  btn.addEventListener('click', function(){
+    var now=Date.now();
+    if(now-lastTap < 320){ clearTimeout(timer); timer=null; lastTap=0; double(); }
+    else { lastTap=now; clearTimeout(timer); timer=setTimeout(function(){ timer=null; single(); }, 320); }
+  });
 })();
-// fallback desktop/test: doppio click sul post-it main crea una lista al volo
-document.getElementById('postit').addEventListener('dblclick', function(){
-  if(activePostit==='main') _createTemp();
-});
 
 // item: tap su check = toggle fatto; tap su testo = modal scelta; swipe sx = elimina (se fatto)
 function _wirePiItem(el){
