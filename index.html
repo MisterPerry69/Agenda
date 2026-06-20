@@ -53,6 +53,7 @@
         <input id="ed-date" class="ed-input ed-half" type="date">
         <input id="ed-time" class="ed-input ed-half" type="time">
       </div>
+      <label class="ed-todo"><input id="ed-todo" type="checkbox" onchange="onTodoToggle()"> Todo del giorno (senza orario)</label>
       <div id="ed-cats" class="ed-cats"></div>
       <label class="ed-google"><input id="ed-google" type="checkbox"> Metti su Google Calendar</label>
       <button id="ed-topostit" class="ed-topostit hidden" onclick="entryToPostit()">↩ Sposta nel post-it</button>
@@ -111,6 +112,8 @@
 
       <div id="rate-step1" class="rate-step">
         <div class="rate-q">Cosa hai fatto?</div>
+        <!-- suggerimenti dall'agenda che cadono in questa fascia: tap per (de)selezionare -->
+        <div id="rate-chips" class="rate-chips"></div>
         <input id="rate-act" class="rate-input" placeholder="scrivi e premi invio…">
       </div>
 

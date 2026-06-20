@@ -111,6 +111,9 @@ body{
 }
 
 .ag-time{ font-size:17px; color:var(--ink); white-space:nowrap; }
+/* todo del giorno: niente orario, un quadratino al posto dell'ora */
+.ag-todo{ color:var(--ink-soft); font-size:18px; }
+.ag-line.is-todo .ag-txt{ font-style:italic; }
 .ag-txt{ font-size:20px; color:var(--ink); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ag-line.done .ag-txt{ text-decoration:line-through; opacity:.45; }
 .ag-pin{ margin-left:6px; }
@@ -193,6 +196,12 @@ body{
 .ed-google{ display:flex; gap:9px; align-items:center; font-family:'Patrick Hand',cursive;
   font-size:16px; color:var(--ink); margin-bottom:12px; cursor:pointer; }
 .ed-google input{ width:18px; height:18px; accent-color:var(--red); }
+.ed-todo{ display:flex; gap:9px; align-items:center; font-family:'Patrick Hand',cursive;
+  font-size:16px; color:var(--ink); margin:0 0 14px; cursor:pointer; }
+.ed-todo input{ width:18px; height:18px; accent-color:var(--ink); }
+/* quando è un todo: orario e Google spenti visivamente */
+.editor.is-todo #ed-time{ opacity:.35; }
+.editor.is-todo .ed-google{ opacity:.4; }
 .ed-topostit{ width:100%; font-family:'Patrick Hand',cursive; font-size:15px; cursor:pointer;
   padding:9px; margin-bottom:14px; border-radius:8px; border:2px dashed var(--ink-soft);
   background:transparent; color:var(--ink-soft); }
@@ -431,6 +440,11 @@ body{
 .rate-input{ width:100%; font-family:'Patrick Hand',cursive; font-size:20px; text-align:center; color:var(--ink);
   background:transparent; border:none; border-bottom:2px solid #d8d2c0; padding:10px 4px; }
 .rate-input:focus{ outline:none; border-bottom-color:var(--ink); }
+/* chip suggerite dall'agenda (eventi della fascia): tap per (de)selezionare */
+.rate-chips{ display:flex; flex-wrap:wrap; gap:7px; justify-content:center; margin:4px 0 10px; }
+.rate-chip{ font-family:'Patrick Hand',cursive; font-size:16px; color:var(--ink); cursor:pointer;
+  background:transparent; border:2px solid #d8d2c0; border-radius:16px; padding:5px 13px; }
+.rate-chip.on{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
 .rate-emoji{ font-size:52px; margin:8px 0; line-height:1; }
 .rate-slider{ width:100%; accent-color:var(--red); }
 .rate-scale{ display:flex; justify-content:space-between; font-size:13px; color:var(--ink-soft); margin-top:2px; }

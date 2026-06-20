@@ -19,9 +19,11 @@ function _loadCache(){
 function _saveCache(){ try{ localStorage.setItem('ql_cache', JSON.stringify(cache)); }catch(e){} }
 function _markPending(id){ if(cache.pending.indexOf(id)<0) cache.pending.push(id); }
 function _clearPending(id){ cache.pending = cache.pending.filter(function(x){ return x!==id; }); }
+// chiave d'ordine: i todo (time vuoto) vanno DOPO le voci con orario, nello stesso giorno
+function _sortKey(e){ return e.date + (e.time ? e.time : '99:99'); }
 function _entriesIn(from,to){
   return cache.entries.filter(function(e){ return !e._deleted && e.date>=from && e.date<=to; })
-    .sort(function(a,b){ return (a.date+a.time)<(b.date+b.time)?-1:1; });
+    .sort(function(a,b){ return _sortKey(a)<_sortKey(b)?-1:1; });
 }
 function _upsert(entry){
   var i = cache.entries.findIndex(function(e){ return e.id===entry.id; });
@@ -119,9 +121,12 @@ function renderDay(rows){
   if(!rows.length){ body.innerHTML='<div class="ag-empty">Niente per oggi.<br>Doppio tap per aggiungere.</div>'; return; }
   body.innerHTML = rows.map(function(e){
     var pin=e.onGoogle?'<span class="ag-pin">📌</span>':'';
-    return '<div class="ag-line'+(e.done?' done':'')+'" data-id="'+e.id+'">'
+    var todo=!e.time;
+    var timeCol = todo ? '<span class="ag-time ag-todo" data-act="edit">▢</span>'
+                       : '<span class="ag-time" data-act="edit">'+e.time+'</span>';
+    return '<div class="ag-line'+(e.done?' done':'')+(todo?' is-todo':'')+'" data-id="'+e.id+'">'
       +'<span class="ag-check'+(e.done?' done':'')+'" data-act="check"></span>'
-      +'<span class="ag-time" data-act="edit">'+e.time+'</span>'
+      +timeCol
       +'<span class="ag-txt" data-act="edit">'+_esc(e.title)+pin+'</span>'
       +'<span class="ag-tag tag-'+e.category+'" data-act="edit"><span>'+e.category+'</span></span>'
       +'</div>';
@@ -148,7 +153,7 @@ function renderWeek(rows){
   for(var i=0;i<7;i++){
     var d=new Date(start); d.setDate(start.getDate()+i); var k=_fmt(d);
     var items=(map[k]||[]).map(function(e){
-      return '<div class="wk-item tag-'+e.category+(e.done?' done':'')+'" data-id="'+e.id+'"><span class="wk-t">'+e.time+'</span> '+_esc(e.title)+(e.onGoogle?' 📌':'')+'</div>';
+      return '<div class="wk-item tag-'+e.category+(e.done?' done':'')+'" data-id="'+e.id+'"><span class="wk-t">'+(e.time||'▢')+'</span> '+_esc(e.title)+(e.onGoogle?' 📌':'')+'</div>';
     }).join('') || '<div class="wk-empty">—</div>';
     html+='<div class="wk-block'+(k===today?' today':'')+'"><div class="wk-day" onclick="goDay(\''+k+'\')">'+G[i]+' '+d.getDate()+'</div>'+items+'</div>';
   }
@@ -237,14 +242,17 @@ function openEditor(id){
   document.getElementById('ed-time').value='';
   document.getElementById('ed-date').value=state.anchor;   // default: giorno corrente
   document.getElementById('ed-google').checked=false;
+  document.getElementById('ed-todo').checked=false;
   if(id){
     var e=cache.entries.find(function(x){ return x.id===id; });
     if(e){ state.editing=e; state.selCat=e.category||'lavoro';
       document.getElementById('ed-title').value=e.title;
       document.getElementById('ed-time').value=e.time;
       document.getElementById('ed-date').value=e.date;
-      document.getElementById('ed-google').checked=!!e.onGoogle; }
+      document.getElementById('ed-google').checked=!!e.onGoogle;
+      document.getElementById('ed-todo').checked=!e.time; }   // senza orario = todo
   }
+  onTodoToggle();   // applica lo stato (abilita/disabilita orario+Google)
   _renderCats();
   document.getElementById('ed-delete').classList.toggle('hidden', !id);
   document.getElementById('ed-topostit').classList.toggle('hidden', !id);  // "Al post-it" solo in modifica
@@ -253,14 +261,24 @@ function openEditor(id){
 }
 function closeEditor(){ document.getElementById('editor').classList.add('hidden'); }
 
+// "Todo del giorno": niente orario, niente Google. Disabilita i due campi quando attivo.
+function onTodoToggle(){
+  var isTodo=document.getElementById('ed-todo').checked;
+  var timeEl=document.getElementById('ed-time'), gEl=document.getElementById('ed-google');
+  timeEl.disabled=isTodo; if(isTodo) timeEl.value='';
+  gEl.disabled=isTodo;    if(isTodo) gEl.checked=false;
+  document.getElementById('editor').classList.toggle('is-todo', isTodo);
+}
+
 function saveEntry(){
   var title=document.getElementById('ed-title').value.trim();
-  var time=document.getElementById('ed-time').value;
+  var isTodo=document.getElementById('ed-todo').checked;
+  var time=isTodo ? '' : document.getElementById('ed-time').value;
   var date=document.getElementById('ed-date').value || state.anchor;   // data scelta (sposta evento)
   if(!title){ alert('Scrivi cosa'); return; }
-  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){ alert('Orario obbligatorio'); return; }
+  if(!isTodo && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){ alert('Orario obbligatorio (o spunta "Todo del giorno")'); return; }
   var entry={ date:date, time:time, title:title, category:state.selCat,
-    onGoogle:document.getElementById('ed-google').checked,
+    onGoogle:isTodo ? false : document.getElementById('ed-google').checked,
     done:(state.editing&&state.editing.done)||false };
   if(state.editing){
     entry.id=state.editing.id; entry.eventId=state.editing.eventId; entry.linkedNoteId=state.editing.linkedNoteId||'';
@@ -537,9 +555,12 @@ function _burnActiveTemp(){
 }
 
 // ====== TRACKING (report a fasce + voti) ======
-// fasce: devono combaciare con TRK_SLOTS del backend
-var TK_SLOTS = ['06:00-08:30','08:30-15:00','15:00-16:00','16:00-17:00','17:00-19:00','19:00-21:00','21:00-24:00'];
-var tkState = { date:null, bySlot:{} };
+// fasce: devono combaciare col backend. Due set (feriale/weekend); il giorno decide.
+var TK_SLOTS_WEEK    = ['06:00-08:30','08:30-15:00','15:00-16:00','16:00-17:00','17:00-19:00','19:00-21:00','21:00-24:00'];
+var TK_SLOTS_WEEKEND = ['06:00-09:00','09:00-13:00','13:00-15:00','15:00-17:00','17:00-19:00','19:00-21:00','21:00-24:00'];
+function _isWeekendISO(date){ var p=date.split('-'); var w=new Date(+p[0],+p[1]-1,+p[2]).getDay(); return w===0||w===6; }
+function _slotsFor(date){ return _isWeekendISO(date) ? TK_SLOTS_WEEKEND : TK_SLOTS_WEEK; }
+var tkState = { date:null, bySlot:{}, slots:[] };
 
 // la fascia è "passata" se l'ora di FINE è già trascorsa (solo per oggi; giorni passati = tutte passate)
 function _slotEnd(slot){ var h=slot.split('-')[1].split(':'); return (+h[0])*60+(+h[1]); }
@@ -555,15 +576,18 @@ function _trkCacheSet(date, bySlot){ try{ localStorage.setItem('ql_trk_'+date, J
 
 function openTracking(){
   tkState.date = state.anchor;
+  tkState.slots = _slotsFor(tkState.date);             // fasce del giorno (feriale/weekend)
   tkState.bySlot = _trkCacheGet(tkState.date) || {};   // subito dalla cache (niente vuoto)
   document.getElementById('tracking').classList.remove('hidden');
   renderTracking();
   apiGet({ action:'getTracking', date:tkState.date }).then(function(d){
     var fresh={}; (d&&d.entries||[]).forEach(function(e){ fresh[e.slot]=e; });
+    if(d&&d.slots&&d.slots.length) tkState.slots=d.slots;   // fasce autorevoli dal server
     // ridisegna solo se cambiato (evita il refresh/flicker inutile)
     if(JSON.stringify(fresh)!==JSON.stringify(tkState.bySlot)){
-      tkState.bySlot=fresh; _trkCacheSet(tkState.date, fresh); renderTracking();
+      tkState.bySlot=fresh; _trkCacheSet(tkState.date, fresh);
     }
+    renderTracking();
   }).catch(function(e){ console.warn('tracking get bg:',e.message); });
 }
 function closeTracking(){ document.getElementById('tracking').classList.add('hidden'); }
@@ -573,7 +597,7 @@ function renderTracking(){
   var oggi = tkState.date===_todayISO();
   document.getElementById('tk-title').innerHTML = '<span>'+d.getDate()+' '+MESI[d.getMonth()].toUpperCase()+'</span><span class="sub">'+(oggi?'i voti di oggi':'voti del giorno')+'</span>';
   var html='';
-  TK_SLOTS.forEach(function(slot){
+  (tkState.slots&&tkState.slots.length ? tkState.slots : _slotsFor(tkState.date)).forEach(function(slot){
     var rec=tkState.bySlot[slot];
     var past=_isPast(slot, tkState.date);
     if(rec && (rec.pleasure!=null || rec.utility!=null || rec.activity)){
@@ -598,20 +622,58 @@ function _slotVoted(rec){ return rec && (rec.pleasure!=null || rec.utility!=null
 function refreshBookmarkBadge(){
   var bm=document.getElementById('bookmark'); if(!bm) return;
   var bySlot = _trkCacheGet(_todayISO()) || {};
-  var arretrate = TK_SLOTS.filter(function(s){ return _isPast(s, _todayISO()) && !_slotVoted(bySlot[s]); }).length;
+  var arretrate = _slotsFor(_todayISO()).filter(function(s){ return _isPast(s, _todayISO()) && !_slotVoted(bySlot[s]); }).length;
   bm.classList.toggle('pending', arretrate>0);
   bm.setAttribute('data-count', arretrate>0 ? arretrate : '');
 }
 
 // ====== MODAL 3-STEP (lazy) ======
-var rateState = { slot:null, step:1, timer:null, rec:null };
+var rateState = { slot:null, step:1, timer:null, rec:null, chosen:[] };
+
+// minuti dall'inizio giornata per una 'HH:mm'
+function _hm(t){ var p=String(t).split(':'); return (+p[0])*60+(+p[1]); }
+// voci d'agenda del giorno che cadono nella fascia: eventi con orario dentro [start,end)
+// + i todo del giorno (senza orario), utili come promemoria di cosa c'era da fare.
+function _entriesInSlot(date, slot){
+  var s=_hm(slot.split('-')[0]), e=_hm(slot.split('-')[1]);
+  return cache.entries.filter(function(en){
+    if(en._deleted || en.date!==date) return false;
+    if(!en.time){ return true; }                 // todo del giorno: sempre suggerito
+    var m=_hm(en.time); return m>=s && m<e;       // evento con orario dentro la fascia
+  }).map(function(en){ return en.title; });
+}
+// ricompone il testo "Cosa1 + Cosa2 [+ testo libero]"
+function _rateComposeActivity(){
+  var free=document.getElementById('rate-act').value.trim();
+  var parts=rateState.chosen.slice();
+  if(free) parts.push(free);
+  return parts.join(' + ');
+}
+function _renderRateChips(){
+  var wrap=document.getElementById('rate-chips');
+  var sugg=_entriesInSlot(tkState.date, rateState.slot);
+  if(!sugg.length){ wrap.innerHTML=''; return; }
+  wrap.innerHTML = sugg.map(function(t){
+    var on=rateState.chosen.indexOf(t)>=0;
+    return '<button class="rate-chip'+(on?' on':'')+'" data-t="'+_esc(t)+'">'+_esc(t)+'</button>';
+  }).join('');
+  Array.prototype.forEach.call(wrap.querySelectorAll('.rate-chip'), function(b){
+    b.addEventListener('click', function(){
+      var t=b.getAttribute('data-t');
+      var i=rateState.chosen.indexOf(t);
+      if(i>=0) rateState.chosen.splice(i,1); else rateState.chosen.push(t);
+      _renderRateChips();
+    });
+  });
+}
 function openRate(slot){
-  rateState.slot=slot; rateState.step=1;
+  rateState.slot=slot; rateState.step=1; rateState.chosen=[];
   rateState.rec = tkState.bySlot[slot] || { date:tkState.date, slot:slot, activity:'', pleasure:null, utility:null };
   document.getElementById('rate-slot').textContent = slot.replace('-',' – ');
   document.getElementById('rate-act').value = rateState.rec.activity||'';
   document.getElementById('rate-pleasure').value = rateState.rec.pleasure||5;
   document.getElementById('rate-utility').value = rateState.rec.utility||5;
+  _renderRateChips();
   _rateShowStep(1);
   document.getElementById('rate').classList.remove('hidden');
   setTimeout(function(){ document.getElementById('rate-act').focus(); }, 80);
@@ -659,7 +721,7 @@ function _rateSaveClose(){
 }
 // wiring eventi del modal rate
 document.getElementById('rate-act').addEventListener('keydown', function(e){
-  if(e.key==='Enter'){ e.preventDefault(); rateState.rec.activity=this.value.trim(); _rateShowStep(2); /* niente _rateArm: il timer parte solo quando muovi lo slider */ }
+  if(e.key==='Enter'){ e.preventDefault(); rateState.rec.activity=_rateComposeActivity(); _rateShowStep(2); /* niente _rateArm: il timer parte solo quando muovi lo slider */ }
 });
 document.getElementById('rate-pleasure').addEventListener('input', function(){ _rateEmoji('p'); _rateArm(); });
 document.getElementById('rate-utility').addEventListener('input', function(){ _rateEmoji('u'); _rateArm(); });
@@ -671,7 +733,7 @@ document.getElementById('rate').addEventListener('click', function(e){
   if(partial){ if(!confirm('Salvare quello che hai messo finora?')){ document.getElementById('rate').classList.add('hidden'); return; } }
   if(rateState.step>=2) rateState.rec.pleasure=+document.getElementById('rate-pleasure').value;
   if(rateState.step>=3) rateState.rec.utility=+document.getElementById('rate-utility').value;
-  rateState.rec.activity=document.getElementById('rate-act').value.trim();
+  rateState.rec.activity=_rateComposeActivity();
   _rateSaveClose();
 });
 
