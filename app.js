@@ -2,10 +2,28 @@
 // URL del Web App di Apps Script (deve finire con /exec). Vedi README per il deploy.
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyfK9M2FA9oI-iCyUyCKg5aJZu6bK1V5lz5YcyQ3CoAXmksEGBXN3Wqm8kRMEMONvio/exec';
 
-var CATS = ['lavoro','casa','libero','cazzeggio'];
+// categorie: chiave interna salvata nel foglio | emoji | etichetta
+var CATS = [
+  { key:'work',   emoji:'💼', label:'Work' },
+  { key:'casa',   emoji:'🏠', label:'Casa' },
+  { key:'social', emoji:'❤️', label:'Social' },
+  { key:'health', emoji:'⚕️', label:'Health' },
+  { key:'admin',  emoji:'📋', label:'Admin' },
+  { key:'hobby',  emoji:'🎯', label:'Hobby' }
+];
+// mappa vecchie categorie (lavoro/casa/libero/cazzeggio) -> nuove chiavi, a sola VISTA
+var CAT_MIGRATE = { lavoro:'work', casa:'casa', libero:'hobby', cazzeggio:'social' };
+function _catKey(raw){ var k=String(raw||''); return CAT_MIGRATE[k] || k; }
+function _catDef(raw){ var k=_catKey(raw); for(var i=0;i<CATS.length;i++){ if(CATS[i].key===k) return CATS[i]; } return null; }
+// HTML del tag categoria per le viste (emoji + etichetta evidenziata); fallback neutro
+function _catTag(raw){
+  var d=_catDef(raw);
+  if(!d) return '<span class="ag-tag tag-unknown" data-act="edit"><span>'+_esc(String(raw||'?'))+'</span></span>';
+  return '<span class="ag-tag tag-'+d.key+'" data-act="edit"><span>'+d.emoji+' '+d.label+'</span></span>';
+}
 var POSTIT_COLORS = ['#ff93cf','#fff04d','#84d2ff','#a7ef5e','#ffb27a'];
 
-var state = { view:'day', anchor:_todayISO(), editing:null, selCat:'lavoro' };
+var state = { view:'day', anchor:_todayISO(), editing:null, selCat:'work' };
 
 // ====== CACHE LOCALE (fruizione immediata) ======
 // Tutte le voci stanno in cache; le viste leggono da qui (istantanee).
@@ -21,9 +39,31 @@ function _markPending(id){ if(cache.pending.indexOf(id)<0) cache.pending.push(id
 function _clearPending(id){ cache.pending = cache.pending.filter(function(x){ return x!==id; }); }
 // chiave d'ordine: i todo (time vuoto) vanno DOPO le voci con orario, nello stesso giorno
 function _sortKey(e){ return e.date + (e.time ? e.time : '99:99'); }
+// un evento occupa più giorni?
+function _isMulti(e){ return !!e.dateEnd && e.dateEnd > e.date; }
+// posizione dell'evento nel giorno k: 'single' | 'start' | 'mid' | 'end'
+function _dayPos(e, k){
+  if(!_isMulti(e)) return 'single';
+  if(k===e.date) return 'start';
+  if(k===e.dateEnd) return 'end';
+  return 'mid';
+}
+// etichetta orario/marcatore da mostrare nel giorno k
+function _dayTimeLabel(e, k){
+  if(!e.time && !_isMulti(e)) return 'todo';
+  var pos=_dayPos(e,k);
+  if(pos==='single') return e.time + (e.timeEnd?('–'+e.timeEnd):'');
+  if(pos==='start')  return '▶ '+(e.time||'');
+  if(pos==='end')    return '◀ '+(e.timeEnd||'');
+  return '⋯';
+}
+// intersezione col range (così le viste vedono i multi-giorno che entrano da prima)
 function _entriesIn(from,to){
-  return cache.entries.filter(function(e){ return !e._deleted && e.date>=from && e.date<=to; })
-    .sort(function(a,b){ return _sortKey(a)<_sortKey(b)?-1:1; });
+  return cache.entries.filter(function(e){
+    if(e._deleted) return false;
+    var s=e.date, en=e.dateEnd||e.date;
+    return s<=to && en>=from;
+  }).sort(function(a,b){ return _sortKey(a)<_sortKey(b)?-1:1; });
 }
 function _upsert(entry){
   var i = cache.entries.findIndex(function(e){ return e.id===entry.id; });
@@ -126,14 +166,15 @@ function renderDay(rows){
   if(!rows.length){ _setHTML(body,'<div class="ag-empty">Niente per oggi.<br>Doppio tap per aggiungere.</div>'); return; }
   var html = rows.map(function(e){
     var pin=e.onGoogle?'<span class="ag-pin">📌</span>':'';
-    var todo=!e.time;
+    var todo=!e.time && !_isMulti(e);
+    var lbl=_dayTimeLabel(e, state.anchor);
     var timeCol = todo ? '<span class="ag-time ag-todo" data-act="edit">todo</span>'
-                       : '<span class="ag-time" data-act="edit">'+e.time+'</span>';
+                       : '<span class="ag-time" data-act="edit">'+lbl+'</span>';
     return '<div class="ag-line'+(e.done?' done':'')+(todo?' is-todo':'')+'" data-id="'+e.id+'">'
       +'<span class="ag-check'+(e.done?' done':'')+'" data-act="check"></span>'
       +timeCol
       +'<span class="ag-txt" data-act="edit">'+_esc(e.title)+pin+'</span>'
-      +'<span class="ag-tag tag-'+e.category+'" data-act="edit"><span>'+e.category+'</span></span>'
+      +_catTag(e.category)
       +'</div>';
   }).join('');
   if(!_setHTML(body, html)) return;   // identico: niente flash, handler già a posto
@@ -147,19 +188,32 @@ function renderDay(rows){
 }
 
 function _byDay(rows){ var m={}; rows.forEach(function(e){ (m[e.date]=m[e.date]||[]).push(e); }); return m; }
+// come _byDay ma espande gli eventi multi-giorno su tutti i giorni del range [from,to]
+function _byDayExpanded(rows, from, to){
+  var m={};
+  rows.forEach(function(e){
+    var s=e.date, en=e.dateEnd||e.date;
+    var a=s<from?from:s, b=en>to?to:en;
+    var p=a.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
+    var bp=b.split('-'); var bd=new Date(+bp[0],+bp[1]-1,+bp[2]);
+    while(d<=bd){ var k=_fmt(d); (m[k]=m[k]||[]).push(e); d.setDate(d.getDate()+1); }
+  });
+  return m;
+}
 
 function renderWeek(rows){
   var body=document.getElementById('ag-body'); body.ondblclick=null;
-  var map=_byDay(rows); var G=['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+  var G=['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
   var today=_todayISO();
   // tutti e 7 i giorni della settimana, preimpostati (anche vuoti), uno sotto l'altro
   var r=_rangeFor('week',state.anchor); var s=r.from.split('-');
   var start=new Date(+s[0],+s[1]-1,+s[2]);
+  var map=_byDayExpanded(rows, r.from, r.to);   // multi-giorno presenti in ogni giorno toccato
   var html='';
   for(var i=0;i<7;i++){
     var d=new Date(start); d.setDate(start.getDate()+i); var k=_fmt(d);
     var items=(map[k]||[]).map(function(e){
-      return '<div class="wk-item tag-'+e.category+(e.done?' done':'')+'" data-id="'+e.id+'"><span class="wk-t">'+(e.time||'todo')+'</span> '+_esc(e.title)+(e.onGoogle?' 📌':'')+'</div>';
+      return '<div class="wk-item tag-'+_catKey(e.category)+(e.done?' done':'')+'" data-id="'+e.id+'"><span class="wk-t">'+_dayTimeLabel(e,k)+'</span> '+_esc(e.title)+(e.onGoogle?' 📌':'')+'</div>';
     }).join('') || '<div class="wk-empty">—</div>';
     html+='<div class="wk-block'+(k===today?' today':'')+'"><div class="wk-day" onclick="goDay(\''+k+'\')">'+G[i]+' '+d.getDate()+'</div>'+items+'</div>';
   }
@@ -174,18 +228,57 @@ function renderMonth(rows){
   var body=document.getElementById('ag-body'); body.ondblclick=null;
   var p=state.anchor.split('-'); var year=+p[0], month=+p[1]-1;
   var startDow=(new Date(year,month,1).getDay()+6)%7, days=new Date(year,month+1,0).getDate();
-  var map=_byDay(rows), today=_todayISO();
+  var today=_todayISO();
+
+  // celle base: numero + eventi PUNTUALI onGoogle come righe brevi (i multi-giorno vanno nelle barre)
+  var map=_byDay(rows);
   var cells='';
   for(var i=0;i<startDow;i++) cells+='<div class="mo-cell mo-empty"></div>';
   for(var dn=1;dn<=days;dn++){
     var key=year+'-'+('0'+(month+1)).slice(-2)+'-'+('0'+dn).slice(-2);
-    // nel mese mostro SOLO gli eventi importanti (quelli su Google Calendar)
-    var items=(map[key]||[]).filter(function(e){ return e.onGoogle; });
-    var evs=items.slice(0,3).map(function(e){ return '<div class="mo-ev tag-'+e.category+'"><span>'+_esc(e.title)+'</span></div>'; }).join('');
-    if(items.length>3) evs+='<div class="mo-more">+'+(items.length-3)+'</div>';
+    var pts=(map[key]||[]).filter(function(e){ return !_isMulti(e) && e.onGoogle; });
+    var evs=pts.slice(0,3).map(function(e){ return '<div class="mo-ev tag-'+_catKey(e.category)+'"><span>'+_esc(e.title)+'</span></div>'; }).join('');
+    if(pts.length>3) evs+='<div class="mo-more">+'+(pts.length-3)+'</div>';
     cells+='<div class="mo-cell'+(key===today?' today':'')+'" onclick="goDay(\''+key+'\')"><div class="mo-num">'+dn+'</div>'+evs+'</div>';
   }
-  _setHTML(body, '<div class="mo-grid"><div class="mo-h">L</div><div class="mo-h">M</div><div class="mo-h">M</div><div class="mo-h">G</div><div class="mo-h">V</div><div class="mo-h">S</div><div class="mo-h">D</div>'+cells+'</div>');
+
+  // barre multi-giorno, per riga-settimana (spezzate a fine riga)
+  var bars=_monthBars(rows.filter(_isMulti), year, month, startDow, days);
+
+  _setHTML(body, '<div class="mo-wrap"><div class="mo-grid">'
+    +'<div class="mo-h">L</div><div class="mo-h">M</div><div class="mo-h">M</div><div class="mo-h">G</div><div class="mo-h">V</div><div class="mo-h">S</div><div class="mo-h">D</div>'
+    +cells+'</div>'+bars+'</div>');
+}
+
+// genera l'HTML delle barre multi-giorno posizionate in assoluto sopra la griglia
+function _monthBars(multi, year, month, startDow, days){
+  if(!multi.length) return '';
+  function idxOf(dn){ return startDow + (dn-1); }      // indice cella 0-based (incl. celle vuote iniziali)
+  function rowOf(ci){ return Math.floor(ci/7); }
+  function colOf(ci){ return ci%7; }
+  var firstISO=year+'-'+('0'+(month+1)).slice(-2)+'-01';
+  var lastISO=year+'-'+('0'+(month+1)).slice(-2)+'-'+('0'+days).slice(-2);
+  var html='';
+  multi.forEach(function(e, ei){
+    var s=e.date<firstISO?firstISO:e.date;             // clamp al mese visibile
+    var en=(e.dateEnd||e.date)>lastISO?lastISO:(e.dateEnd||e.date);
+    if(en<firstISO || s>lastISO) return;
+    var sdn=+s.split('-')[2], edn=+en.split('-')[2];
+    var dn=sdn;
+    while(dn<=edn){
+      var ci=idxOf(dn), row=rowOf(ci), col=colOf(ci);
+      var spanEnd=dn;                                  // estendi fino a fine riga o fine evento
+      while(spanEnd+1<=edn && colOf(idxOf(spanEnd+1))!==0){ spanEnd++; }
+      var span=spanEnd-dn+1;
+      var roundL=(dn===sdn)?' bar-l':'';               // estremo reale sinistro
+      var roundR=(spanEnd===edn)?' bar-r':'';          // estremo reale destro
+      html+='<div class="mo-bar tag-'+_catKey(e.category)+roundL+roundR+'" '
+        +'style="--row:'+row+'; --col:'+col+'; --span:'+span+'; --lane:'+(ei%3)+'" '
+        +'onclick="goDay(\''+s+'\')"><span>'+_esc(e.title)+'</span></div>';
+      dn=spanEnd+1;
+    }
+  });
+  return html;
 }
 
 function goDay(k){ state.anchor=k; _setView('day'); }
@@ -234,27 +327,36 @@ function toggleDone(id){
 // ====== EDITOR ======
 function _renderCats(){
   document.getElementById('ed-cats').innerHTML = CATS.map(function(c){
-    return '<button class="ed-cat tag-'+c+(c===state.selCat?' sel':'')+'" onclick="selCat(\''+c+'\')"><span>'+c+'</span></button>';
+    return '<button class="ed-cat tag-'+c.key+(c.key===state.selCat?' sel':'')+'" onclick="selCat(\''+c.key+'\')">'
+      + '<span>'+c.emoji+' '+c.label+'</span></button>';
   }).join('');
 }
 function selCat(c){ state.selCat=c; _renderCats(); }
 function openEditor(id){
-  state.editing=null; state.selCat='lavoro'; state.fromPostitId=null;
+  state.editing=null; state.selCat='work'; state.fromPostitId=null;
   document.getElementById('ed-title').value='';
   document.getElementById('ed-time').value='';
   document.getElementById('ed-date').value=state.anchor;   // default: giorno corrente
   document.getElementById('ed-google').checked=false;
   document.getElementById('ed-todo').checked=false;
+  document.getElementById('ed-extend').checked=false;
+  document.getElementById('ed-time-end').value='';
+  document.getElementById('ed-date-end').value='';
   if(id){
     var e=cache.entries.find(function(x){ return x.id===id; });
-    if(e){ state.editing=e; state.selCat=e.category||'lavoro';
+    if(e){ state.editing=e; state.selCat=_catKey(e.category)||'work';
       document.getElementById('ed-title').value=e.title;
       document.getElementById('ed-time').value=e.time;
       document.getElementById('ed-date').value=e.date;
       document.getElementById('ed-google').checked=!!e.onGoogle;
-      document.getElementById('ed-todo').checked=!e.time; }   // senza orario = todo
+      document.getElementById('ed-todo').checked=(!e.time && !(e.dateEnd&&e.dateEnd>e.date));   // todo = senza orario e non multi-giorno
+      var hasEnd=!!(e.dateEnd||e.timeEnd);
+      document.getElementById('ed-extend').checked=hasEnd;
+      document.getElementById('ed-time-end').value=e.timeEnd||'';
+      document.getElementById('ed-date-end').value=e.dateEnd||''; }
   }
-  onTodoToggle();   // applica lo stato (abilita/disabilita orario+Google)
+  onTodoToggle();   // applica lo stato (abilita/disabilita orario+Google+Estendi)
+  onExtendToggle(); // mostra/nasconde i campi fine in base allo stato
   _renderCats();
   document.getElementById('ed-delete').classList.toggle('hidden', !id);
   document.getElementById('ed-topostit').classList.toggle('hidden', !id);  // "Al post-it" solo in modifica
@@ -263,25 +365,47 @@ function openEditor(id){
 }
 function closeEditor(){ document.getElementById('editor').classList.add('hidden'); }
 
-// "Todo del giorno": niente orario, niente Google. Disabilita i due campi quando attivo.
+// "Todo": niente orario/Google/Estendi. "Estendi": sblocca data inizio + mostra fine.
 function onTodoToggle(){
   var isTodo=document.getElementById('ed-todo').checked;
-  var timeEl=document.getElementById('ed-time'), gEl=document.getElementById('ed-google');
+  var timeEl=document.getElementById('ed-time'), gEl=document.getElementById('ed-google'), exEl=document.getElementById('ed-extend');
+  if(isTodo){ exEl.checked=false; onExtendToggle(); }   // todo annulla estendi
   timeEl.disabled=isTodo; if(isTodo) timeEl.value='';
   gEl.disabled=isTodo;    if(isTodo) gEl.checked=false;
+  exEl.disabled=isTodo;
   document.getElementById('editor').classList.toggle('is-todo', isTodo);
+}
+function onExtendToggle(){
+  var ex=document.getElementById('ed-extend').checked;
+  document.getElementById('ed-end-row').classList.toggle('hidden', !ex);
+  // estendere sblocca la data d'inizio (altrimenti resta bloccata sul giorno)
+  var dateEl=document.getElementById('ed-date');
+  dateEl.disabled=!ex;
+  dateEl.classList.toggle('ed-date-locked', !ex);
 }
 
 function saveEntry(){
   var title=document.getElementById('ed-title').value.trim();
   var isTodo=document.getElementById('ed-todo').checked;
+  var isExt=document.getElementById('ed-extend').checked;
   var time=isTodo ? '' : document.getElementById('ed-time').value;
-  var date=document.getElementById('ed-date').value || state.anchor;   // data scelta (sposta evento)
+  var date=document.getElementById('ed-date').value || state.anchor;
+  var timeEnd=(!isTodo && isExt) ? document.getElementById('ed-time-end').value : '';
+  var dateEnd=(!isTodo && isExt) ? document.getElementById('ed-date-end').value : '';
   if(!title){ alert('Scrivi cosa'); return; }
-  if(!isTodo && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){ alert('Orario obbligatorio (o spunta "Todo del giorno")'); return; }
+  var isMulti=!!dateEnd && dateEnd>date;   // multi-giorno: l'ora inizio può mancare (= all-day)
+  if(!isTodo && !isMulti && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){ alert('Orario obbligatorio (o spunta "Todo")'); return; }
+  if(time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){ alert('Orario non valido'); return; }
+  if(timeEnd && !/^([01]\d|2[0-3]):[0-5]\d$/.test(timeEnd)){ alert('Ora fine non valida'); return; }
+  // fine >= inizio (combinando data+ora; ora vuota = 00:00)
+  if(dateEnd || timeEnd){
+    var endD=dateEnd||date, endT=timeEnd||time||'00:00';
+    if((endD+'T'+endT) < (date+'T'+(time||'00:00'))){ alert('La fine è prima dell\'inizio'); return; }
+  }
   var entry={ date:date, time:time, title:title, category:state.selCat,
     onGoogle:isTodo ? false : document.getElementById('ed-google').checked,
-    done:(state.editing&&state.editing.done)||false };
+    done:(state.editing&&state.editing.done)||false,
+    dateEnd:dateEnd, timeEnd:timeEnd };
   if(state.editing){
     entry.id=state.editing.id; entry.eventId=state.editing.eventId; entry.linkedNoteId=state.editing.linkedNoteId||'';
     _markPending(entry.id); _upsert(entry); render(); closeEditor();          // UI subito

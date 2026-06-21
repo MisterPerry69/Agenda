@@ -49,13 +49,26 @@
   <div id="editor" class="editor hidden">
     <div class="editor-card">
       <input id="ed-title" class="ed-input" placeholder="Cosa?">
+
       <div class="ed-row">
-        <input id="ed-date" class="ed-input ed-half" type="date">
         <input id="ed-time" class="ed-input ed-half" type="time">
+        <input id="ed-date" class="ed-input ed-half ed-date-locked" type="date" disabled>
       </div>
-      <label class="ed-todo"><input id="ed-todo" type="checkbox" onchange="onTodoToggle()"> Todo del giorno (senza orario)</label>
+
+      <!-- campi FINE: compaiono solo con "Estendi data" -->
+      <div id="ed-end-row" class="ed-row hidden">
+        <input id="ed-time-end" class="ed-input ed-half" type="time">
+        <input id="ed-date-end" class="ed-input ed-half" type="date">
+      </div>
+
+      <div class="ed-flags">
+        <label class="ed-flag"><input id="ed-todo" type="checkbox" onchange="onTodoToggle()"> Todo</label>
+        <label class="ed-flag"><input id="ed-google" type="checkbox"> Google Calendar</label>
+        <label class="ed-flag"><input id="ed-extend" type="checkbox" onchange="onExtendToggle()"> Estendi data</label>
+      </div>
+
       <div id="ed-cats" class="ed-cats"></div>
-      <label class="ed-google"><input id="ed-google" type="checkbox"> Metti su Google Calendar</label>
+
       <button id="ed-topostit" class="ed-topostit hidden" onclick="entryToPostit()">↩ Sposta nel post-it</button>
       <div class="ed-actions">
         <button id="ed-delete" class="hidden" onclick="deleteCurrent()">Elimina</button>

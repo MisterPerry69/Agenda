@@ -13,10 +13,14 @@
   --rule:      #2b2b2b;          /* righine tra le voci */
   --red:       #cc2b2b;          /* cerchio "oggi" / accenti rossi */
   /* evidenziatori classici */
-  --hl-yellow: #fff04d;          /* libero */
-  --hl-blue:   #84d2ff;          /* lavoro */
-  --hl-green:  #a7ef5e;          /* casa */
-  --hl-pink:   #ff93cf;          /* cazzeggio */
+  --hl-yellow: #fff04d;          /* (resta in palette, non più usato dalle categorie) */
+  --hl-blue:   #84d2ff;          /* work */
+  --hl-green:  #a7ef5e;          /* health */
+  --hl-pink:   #ff93cf;          /* social */
+  --hl-orange: #ffb86b;          /* casa */
+  --hl-purple: #c9a7ef;          /* hobby */
+  --hl-grey:   #cfcfcf;          /* admin */
+  --mo-rowh:   86px;             /* altezza riga mese: DEVE combaciare con min-height di .mo-cell */
 }
 
 *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -92,7 +96,7 @@ body{
 .ag-body{ flex:1; min-height:0; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
 
 .ag-line{
-  display:grid; grid-template-columns:26px 52px minmax(0,1fr) auto; gap:9px; align-items:center;
+  display:grid; grid-template-columns:26px auto minmax(0,1fr) auto; gap:9px; align-items:center;
   padding:12px 2px; border-bottom:2px solid transparent; cursor:pointer;
   /* righina handwritten come bordo inferiore */
   border-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 4' preserveAspectRatio='none'%3E%3Cpath d='M1,2 C50,1 90,3 150,2 C210,1 260,3 299,2' stroke='%232b2b2b' stroke-width='1.4' fill='none'/%3E%3C/svg%3E") 0 0 100% 0 / 0 0 2px 0 stretch;
@@ -110,7 +114,7 @@ body{
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4,5 C3,11 4,18 5,20 C10,21 17,20 20,19 C21,13 20,7 19,4 C13,3 8,3 4,5 Z' stroke='%231a1a1a' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3Cpath d='M6,12 C8,15 9,17 11,18 C14,12 17,7 20,3' stroke='%23cc2b2b' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
-.ag-time{ font-size:17px; color:var(--ink); white-space:nowrap; }
+.ag-time{ font-size:16px; color:var(--ink); white-space:nowrap; }
 /* todo del giorno: niente orario, scritta "todo" al posto dell'ora */
 .ag-todo{ color:var(--red); font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
 .ag-line.is-todo .ag-txt{ font-style:italic; }
@@ -124,10 +128,13 @@ body{
 .ag-tag::before, .ag-tag::after{ content:""; position:absolute; mix-blend-mode:multiply; z-index:0; }
 .ag-tag::before{ left:-2px; right:-2px; top:16%; bottom:12%; transform:rotate(-1.8deg); border-radius:7px 9px 6px 10px; }
 .ag-tag::after{ left:2px; right:4px; top:30%; bottom:26%; transform:rotate(1.3deg); border-radius:9px; opacity:.65; }
-.tag-libero::before,   .tag-libero::after{   background:var(--hl-yellow); }
-.tag-lavoro::before,   .tag-lavoro::after{   background:var(--hl-blue); }
-.tag-casa::before,     .tag-casa::after{     background:var(--hl-green); }
-.tag-cazzeggio::before,.tag-cazzeggio::after{background:var(--hl-pink); }
+.tag-work::before,   .tag-work::after{   background:var(--hl-blue); }
+.tag-casa::before,   .tag-casa::after{   background:var(--hl-orange); }
+.tag-social::before, .tag-social::after{ background:var(--hl-pink); }
+.tag-health::before, .tag-health::after{ background:var(--hl-green); }
+.tag-admin::before,  .tag-admin::after{  background:var(--hl-grey); }
+.tag-hobby::before,  .tag-hobby::after{  background:var(--hl-purple); }
+.tag-unknown::before,.tag-unknown::after{ background:#e2e2e2; }
 
 .ag-empty{ text-align:center; color:var(--ink-soft); padding:60px 20px; font-size:19px; }
 
@@ -187,21 +194,22 @@ body{
 .ed-cat span{ position:relative; z-index:1; }
 .ed-cat.sel::before{ content:""; position:absolute; inset:8% -3%; mix-blend-mode:multiply;
   transform:rotate(-1.6deg); border-radius:7px 9px 6px 10px; }
-.ed-cat.sel.tag-libero::before{ background:var(--hl-yellow); }
-.ed-cat.sel.tag-lavoro::before{ background:var(--hl-blue); }
-.ed-cat.sel.tag-casa::before{ background:var(--hl-green); }
-.ed-cat.sel.tag-cazzeggio::before{ background:var(--hl-pink); }
+.ed-cat.sel.tag-work::before{   background:var(--hl-blue); }
+.ed-cat.sel.tag-casa::before{   background:var(--hl-orange); }
+.ed-cat.sel.tag-social::before{ background:var(--hl-pink); }
+.ed-cat.sel.tag-health::before{ background:var(--hl-green); }
+.ed-cat.sel.tag-admin::before{  background:var(--hl-grey); }
+.ed-cat.sel.tag-hobby::before{  background:var(--hl-purple); }
 .ed-row{ display:flex; gap:12px; }
 .ed-half{ flex:1; min-width:0; }
-.ed-google{ display:flex; gap:9px; align-items:center; font-family:'Patrick Hand',cursive;
-  font-size:16px; color:var(--ink); margin-bottom:12px; cursor:pointer; }
-.ed-google input{ width:18px; height:18px; accent-color:var(--red); }
-.ed-todo{ display:flex; gap:9px; align-items:center; font-family:'Patrick Hand',cursive;
-  font-size:16px; color:var(--ink); margin:0 0 14px; cursor:pointer; }
-.ed-todo input{ width:18px; height:18px; accent-color:var(--ink); }
-/* quando è un todo: orario e Google spenti visivamente */
+.ed-flags{ display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin:4px 0 16px; }
+.ed-flag{ display:flex; gap:7px; align-items:center; font-family:'Patrick Hand',cursive;
+  font-size:16px; color:var(--ink); cursor:pointer; }
+.ed-flag input{ width:18px; height:18px; accent-color:var(--ink); }
+/* data bloccata: grigia finché non si attiva "Estendi data" */
+.ed-date-locked{ opacity:.4; pointer-events:none; }
 .editor.is-todo #ed-time{ opacity:.35; }
-.editor.is-todo .ed-google{ opacity:.4; }
+.editor.is-todo .ed-flag:nth-child(2){ opacity:.4; }   /* Google spento in todo */
 .ed-topostit{ width:100%; font-family:'Patrick Hand',cursive; font-size:15px; cursor:pointer;
   padding:9px; margin-bottom:14px; border-radius:8px; border:2px dashed var(--ink-soft);
   background:transparent; color:var(--ink-soft); }
@@ -350,7 +358,7 @@ body{
   border-top:2px solid var(--ink); border-left:2px solid var(--ink); }
 .mo-h{ font-size:11px; text-transform:uppercase; text-align:center; padding:5px 0;
   border-right:2px solid var(--ink); border-bottom:2px solid var(--ink); color:var(--ink); letter-spacing:.5px; }
-.mo-cell{ min-height:86px; border-right:1.5px solid var(--rule); border-bottom:1.5px solid var(--rule);
+.mo-cell{ min-height:var(--mo-rowh); border-right:1.5px solid var(--rule); border-bottom:1.5px solid var(--rule);
   padding:3px 4px; position:relative; cursor:pointer; overflow:hidden; }
 .mo-empty{ background:repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(0,0,0,.035) 5px,rgba(0,0,0,.035) 7px); }
 .mo-num{ font-size:13px; color:var(--ink-soft); }
@@ -367,11 +375,36 @@ body{
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; z-index:1; }
 .mo-more{ font-size:8px; color:var(--ink-soft); margin-top:1px; padding-left:2px; }
 .mo-ev::before{ content:""; position:absolute; inset:10% 0; mix-blend-mode:multiply; transform:rotate(-1.5deg); border-radius:2px; }
-.mo-ev.tag-libero::before{ background:var(--hl-yellow); }
-.mo-ev.tag-lavoro::before{ background:var(--hl-blue); }
-.mo-ev.tag-casa::before{ background:var(--hl-green); }
-.mo-ev.tag-cazzeggio::before{ background:var(--hl-pink); }
+.mo-ev.tag-work::before{   background:var(--hl-blue); }
+.mo-ev.tag-casa::before{   background:var(--hl-orange); }
+.mo-ev.tag-social::before{ background:var(--hl-pink); }
+.mo-ev.tag-health::before{ background:var(--hl-green); }
+.mo-ev.tag-admin::before{  background:var(--hl-grey); }
+.mo-ev.tag-hobby::before{  background:var(--hl-purple); }
+.mo-ev.tag-unknown::before{ background:#e2e2e2; }
 .mo-ev span{ position:relative; z-index:1; }
+
+/* ---- barre multi-giorno (overlay assoluto sopra la griglia) ---- */
+.mo-wrap{ position:relative; }
+/* la griglia: 1 riga header (~27px col padding/bordo) + righe-giorno alte --mo-rowh.
+   --row 0-based (riga dei giorni), --col 0-based, --span n. celle, --lane corsia verticale. */
+.mo-bar{
+  position:absolute; box-sizing:border-box; height:16px; overflow:hidden; z-index:2;
+  font-family:'Patrick Hand',cursive; font-size:11px; line-height:16px; color:var(--ink);
+  padding:0 6px; white-space:nowrap; cursor:pointer;
+  left:calc(var(--col) * (100% / 7) + 2px);
+  width:calc(var(--span) * (100% / 7) - 4px);
+  top:calc(27px + var(--row) * var(--mo-rowh) + 22px + var(--lane) * 18px);
+}
+.mo-bar.bar-l{ border-top-left-radius:7px; border-bottom-left-radius:7px; }
+.mo-bar.bar-r{ border-top-right-radius:7px; border-bottom-right-radius:7px; }
+.mo-bar.tag-work{   background:var(--hl-blue); }
+.mo-bar.tag-casa{   background:var(--hl-orange); }
+.mo-bar.tag-social{ background:var(--hl-pink); }
+.mo-bar.tag-health{ background:var(--hl-green); }
+.mo-bar.tag-admin{  background:var(--hl-grey); }
+.mo-bar.tag-hobby{  background:var(--hl-purple); }
+.mo-bar.tag-unknown{ background:#e2e2e2; }
 
 /* ===================== BOOKMARK (apre tracking) ===================== */
 /* figlio di .app: ancorato a top:0 del viewport → sborda verso l'alto oltre il bordo della pagina */
