@@ -111,8 +111,8 @@ body{
 }
 
 .ag-time{ font-size:17px; color:var(--ink); white-space:nowrap; }
-/* todo del giorno: niente orario, un quadratino al posto dell'ora */
-.ag-todo{ color:var(--ink-soft); font-size:18px; }
+/* todo del giorno: niente orario, scritta "todo" al posto dell'ora */
+.ag-todo{ color:var(--red); font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
 .ag-line.is-todo .ag-txt{ font-style:italic; }
 .ag-txt{ font-size:20px; color:var(--ink); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .ag-line.done .ag-txt{ text-decoration:line-through; opacity:.45; }

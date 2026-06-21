@@ -105,6 +105,11 @@ function _titleFor(){
 }
 function _esc(s){ return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
 
+// Scrive html SOLO se diverso da quello già presente: evita il "flash" (reflow +
+// reset scroll) quando si ridisegna con contenuto identico (es. dopo conferma server).
+// Ritorna true se ha effettivamente riscritto (così il chiamante ricabla gli handler).
+function _setHTML(el, html){ if(el.innerHTML===html){ return false; } el.innerHTML=html; return true; }
+
 // ====== RENDER ======
 function render(){
   document.getElementById('ag-title').innerHTML = _titleFor();
@@ -118,11 +123,11 @@ function render(){
 function renderDay(rows){
   var body=document.getElementById('ag-body');
   body.ondblclick=function(ev){ if(!ev.target.closest('.ag-line')) openEditor(); };
-  if(!rows.length){ body.innerHTML='<div class="ag-empty">Niente per oggi.<br>Doppio tap per aggiungere.</div>'; return; }
-  body.innerHTML = rows.map(function(e){
+  if(!rows.length){ _setHTML(body,'<div class="ag-empty">Niente per oggi.<br>Doppio tap per aggiungere.</div>'); return; }
+  var html = rows.map(function(e){
     var pin=e.onGoogle?'<span class="ag-pin">📌</span>':'';
     var todo=!e.time;
-    var timeCol = todo ? '<span class="ag-time ag-todo" data-act="edit">▢</span>'
+    var timeCol = todo ? '<span class="ag-time ag-todo" data-act="edit">todo</span>'
                        : '<span class="ag-time" data-act="edit">'+e.time+'</span>';
     return '<div class="ag-line'+(e.done?' done':'')+(todo?' is-todo':'')+'" data-id="'+e.id+'">'
       +'<span class="ag-check'+(e.done?' done':'')+'" data-act="check"></span>'
@@ -131,6 +136,7 @@ function renderDay(rows){
       +'<span class="ag-tag tag-'+e.category+'" data-act="edit"><span>'+e.category+'</span></span>'
       +'</div>';
   }).join('');
+  if(!_setHTML(body, html)) return;   // identico: niente flash, handler già a posto
   Array.prototype.forEach.call(body.querySelectorAll('.ag-line'), function(line){
     var id=line.getAttribute('data-id');
     line.addEventListener('click', function(ev){
@@ -153,15 +159,11 @@ function renderWeek(rows){
   for(var i=0;i<7;i++){
     var d=new Date(start); d.setDate(start.getDate()+i); var k=_fmt(d);
     var items=(map[k]||[]).map(function(e){
-      return '<div class="wk-item tag-'+e.category+(e.done?' done':'')+'" data-id="'+e.id+'"><span class="wk-t">'+(e.time||'▢')+'</span> '+_esc(e.title)+(e.onGoogle?' 📌':'')+'</div>';
+      return '<div class="wk-item tag-'+e.category+(e.done?' done':'')+'" data-id="'+e.id+'"><span class="wk-t">'+(e.time||'todo')+'</span> '+_esc(e.title)+(e.onGoogle?' 📌':'')+'</div>';
     }).join('') || '<div class="wk-empty">—</div>';
     html+='<div class="wk-block'+(k===today?' today':'')+'"><div class="wk-day" onclick="goDay(\''+k+'\')">'+G[i]+' '+d.getDate()+'</div>'+items+'</div>';
   }
-  body.innerHTML=html;
-  // doppio tap su un giorno della settimana = nuovo evento in quel giorno
-  Array.prototype.forEach.call(body.querySelectorAll('.wk-block'), function(blk){
-    blk.addEventListener('dblclick', function(){ /* apre editor sul giorno del blocco */ });
-  });
+  if(!_setHTML(body, html)) return;   // identico: niente flash
   // tap su una voce esistente = modifica
   Array.prototype.forEach.call(body.querySelectorAll('.wk-item[data-id]'), function(it){
     it.addEventListener('click', function(){ openEditor(it.getAttribute('data-id')); });
@@ -183,7 +185,7 @@ function renderMonth(rows){
     if(items.length>3) evs+='<div class="mo-more">+'+(items.length-3)+'</div>';
     cells+='<div class="mo-cell'+(key===today?' today':'')+'" onclick="goDay(\''+key+'\')"><div class="mo-num">'+dn+'</div>'+evs+'</div>';
   }
-  body.innerHTML='<div class="mo-grid"><div class="mo-h">L</div><div class="mo-h">M</div><div class="mo-h">M</div><div class="mo-h">G</div><div class="mo-h">V</div><div class="mo-h">S</div><div class="mo-h">D</div>'+cells+'</div>';
+  _setHTML(body, '<div class="mo-grid"><div class="mo-h">L</div><div class="mo-h">M</div><div class="mo-h">M</div><div class="mo-h">G</div><div class="mo-h">V</div><div class="mo-h">S</div><div class="mo-h">D</div>'+cells+'</div>');
 }
 
 function goDay(k){ state.anchor=k; _setView('day'); }
@@ -414,14 +416,15 @@ function renderPostit(){
   var items=_active().items;
   if(!items.length){
     var hint=_isTemp() ? 'Lista al volo. Scrivi sopra e premi invio.' : 'Niente ancora. Scrivi sopra e premi invio.';
-    list.innerHTML='<div style="opacity:.45;font-style:italic;padding:10px 2px">'+hint+'</div>'; return;
+    _setHTML(list,'<div style="opacity:.45;font-style:italic;padding:10px 2px">'+hint+'</div>'); return;
   }
-  list.innerHTML = _piOrdered().map(function(it){
+  var html = _piOrdered().map(function(it){
     return '<div class="pi-item'+(it.done?' done':'')+'" data-id="'+it.id+'">'
       +'<span class="pi-check" data-act="toggle"></span>'
       +'<span class="pi-text" data-act="tap">'+_esc(it.text)+'</span>'
       +'<span class="pi-del">🗑</span></div>';
   }).join('');
+  if(!_setHTML(list, html)) return;   // identico: niente flash
   Array.prototype.forEach.call(list.querySelectorAll('.pi-item'), _wirePiItem);
 }
 function addPostitItem(text){
@@ -595,7 +598,7 @@ function closeTracking(){ document.getElementById('tracking').classList.add('hid
 function renderTracking(){
   var p=tkState.date.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
   var oggi = tkState.date===_todayISO();
-  document.getElementById('tk-title').innerHTML = '<span>'+d.getDate()+' '+MESI[d.getMonth()].toUpperCase()+'</span><span class="sub">'+(oggi?'i voti di oggi':'voti del giorno')+'</span>';
+  _setHTML(document.getElementById('tk-title'), '<span>'+d.getDate()+' '+MESI[d.getMonth()].toUpperCase()+'</span><span class="sub">'+(oggi?'i voti di oggi':'voti del giorno')+'</span>');
   var html='';
   (tkState.slots&&tkState.slots.length ? tkState.slots : _slotsFor(tkState.date)).forEach(function(slot){
     var rec=tkState.bySlot[slot];
@@ -611,7 +614,7 @@ function renderTracking(){
       html+='<div class="tk-slot future"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act empty">— non ancora</div></div>';
     }
   });
-  document.getElementById('tk-slots').innerHTML=html;
+  _setHTML(document.getElementById('tk-slots'), html);   // riscrive solo se cambiato (niente flash)
 }
 
 function emojiP(v){ return v<=2?'💀':v<=4?'😩':v<=6?'😐':v<=8?'😎':'🔥'; }
