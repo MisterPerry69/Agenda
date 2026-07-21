@@ -735,7 +735,7 @@ function renderTracking(){
       var votes='';
       if(rec.pleasure!=null) votes+='<span class="tk-v p">'+rec.pleasure+'</span>';
       if(rec.utility!=null)  votes+='<span class="tk-v u">'+rec.utility+'</span>';
-      if(rec.mood!=null)     votes+='<span class="tk-v m '+moodClass(rec.mood)+'">'+moodFace(rec.mood)+'</span>';
+      if(rec.mood!=null)     votes+='<span class="tk-v m '+moodClass(rec.mood)+'">'+rec.mood+' '+moodFace(rec.mood)+'</span>';
       html+='<div class="tk-slot" onclick="openRate(\''+slot+'\')"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act">'+_esc(rec.activity||'(senza nota)')+'</div><div class="tk-votes">'+votes+'</div></div>';
     } else if(past){
       html+='<div class="tk-slot" onclick="openRate(\''+slot+'\')"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act empty">da votare…</div><div class="tk-votes"><span class="tk-add">+</span></div></div>';
@@ -797,6 +797,16 @@ function openMonthStats(){
 }
 function closeMonthStats(){ document.getElementById('monthstats').classList.add('hidden'); }
 
+// Voti storici salvati con la vecchia scala 0-10: uno 0 sfonderebbe il grafico (scala 1-10)
+// finendo sopra le etichette. Lo riportiamo a 1 (entrambi significavano "il minimo").
+function _clamp10(v){ if(v==null) return null; return Math.max(1, Math.min(10, v)); }
+
+var MS_FIELDS = [
+  { k:'pleasure', cls:'p', lab:'piacevolezza' },
+  { k:'utility',  cls:'u', lab:'utilità' },
+  { k:'mood',     cls:'m', lab:'mood' }
+];
+
 function renderMonthStats(){
   var d=msState.data;
   if(!d || !d.days || !d.days.length){
@@ -804,59 +814,67 @@ function renderMonthStats(){
     return;
   }
   var daysInMonth=+msState.to.split('-')[2];
-  // indicizza per numero-giorno
   var byNum={};
   d.days.forEach(function(x){ byNum[+x.date.split('-')[2]]=x; });
 
-  // ---- grafico SVG: 3 linee (piacevolezza, utilità, mood) su scala 1-10 ----
-  var W=320, H=150, PL=22, PR=6, PT=8, PB=18;   // padding interni
-  var iw=W-PL-PR, ih=H-PT-PB;
-  function X(n){ return PL + (daysInMonth<=1?0:(n-1)/(daysInMonth-1)*iw); }
-  function Y(v){ return PT + (10-v)/9*ih; }      // scala 1..10 → alto..basso
+  // ---- grafico RUOTATO: giorni sull'asse VERTICALE, voti 1-10 su quello ORIZZONTALE.
+  // Sfrutta la verticalità del telefono; tutti i giorni entrano in una schermata.
+  var ROW=16;                                   // altezza per giorno
+  var PL=20, PR=10, PT=16, PB=20;               // padding (PL = spazio numeri giorno)
+  var W=300, H=PT+PB+daysInMonth*ROW;
+  var iw=W-PL-PR;
+  function X(v){ return PL + (v-1)/9*iw; }      // voto 1..10 → sinistra..destra
+  function Y(n){ return PT + (n-0.5)*ROW; }     // giorno n al centro della sua riga
+
+  // griglia verticale su OGNI valore 1..10 + numeri sotto e sopra
+  var grid='', xlab='';
+  for(var v=1; v<=10; v++){
+    var strong=(v===1||v===5||v===10);
+    grid+='<line class="ms-grid'+(strong?' strong':'')+'" x1="'+X(v).toFixed(1)+'" y1="'+PT+'" x2="'+X(v).toFixed(1)+'" y2="'+(H-PB).toFixed(1)+'"/>';
+    xlab+='<text class="ms-xlab" x="'+X(v).toFixed(1)+'" y="'+(PT-5)+'">'+v+'</text>'
+        + '<text class="ms-xlab" x="'+X(v).toFixed(1)+'" y="'+(H-6)+'">'+v+'</text>';
+  }
+  // etichette giorni (TUTTE) + riga tenue per giorno
+  var ylab='';
+  for(var n=1;n<=daysInMonth;n++){
+    ylab+='<text class="ms-ylab" x="'+(PL-6)+'" y="'+(Y(n)+3).toFixed(1)+'">'+n+'</text>';
+    if(byNum[n]) ylab+='<line class="ms-rowline" x1="'+PL+'" y1="'+Y(n).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(n).toFixed(1)+'"/>';
+  }
+
   function path(field){
-    var seg=[], started=false, out='';
+    var started=false, out='';
     for(var n=1;n<=daysInMonth;n++){
       var rec=byNum[n];
-      var v=rec && rec[field]!=null ? rec[field] : null;
-      if(v==null){ started=false; continue; }     // buco: spezza la linea
-      out += (started?' L':' M') + X(n).toFixed(1) + ' ' + Y(v).toFixed(1);
+      var v=rec ? _clamp10(rec[field]) : null;
+      if(v==null){ started=false; continue; }    // giorno non votato: spezza la linea
+      out += (started?' L':' M') + X(v).toFixed(1) + ' ' + Y(n).toFixed(1);
       started=true;
     }
     return out.trim();
   }
-  function dots(field, cls){
+  // i pallini portano i dati per la bolla (tap/hover)
+  function dots(f){
     var s='';
     for(var n=1;n<=daysInMonth;n++){
-      var rec=byNum[n]; var v=rec && rec[field]!=null ? rec[field] : null;
-      if(v==null) continue;
-      s+='<circle class="'+cls+'" cx="'+X(n).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="2.2"/>';
+      var rec=byNum[n]; if(!rec) continue;
+      var v=_clamp10(rec[f.k]); if(v==null) continue;
+      s+='<circle class="ms-dot '+f.cls+'" cx="'+X(v).toFixed(1)+'" cy="'+Y(n).toFixed(1)+'" r="3.4"'
+       + ' data-lab="'+f.lab+'" data-val="'+(Math.round(rec[f.k]*10)/10)+'" data-day="'+n+'"/>';
     }
     return s;
   }
-  // griglia orizzontale a 2/5/8 + etichette
-  var grid='';
-  [2,5,8].forEach(function(v){
-    grid+='<line class="ms-grid" x1="'+PL+'" y1="'+Y(v).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(v).toFixed(1)+'"/>'
-       +  '<text class="ms-ylab" x="2" y="'+(Y(v)+3).toFixed(1)+'">'+v+'</text>';
+  var lines='', points='';
+  MS_FIELDS.forEach(function(f){
+    lines += '<path class="ms-line '+f.cls+'" d="'+path(f.k)+'"/>';
+    points += dots(f);
   });
-  // etichette giorni (1, 10, 20, ultimo)
-  var xlab='';
-  [1,10,20,daysInMonth].forEach(function(n){
-    if(n>daysInMonth) return;
-    xlab+='<text class="ms-xlab" x="'+X(n).toFixed(1)+'" y="'+(H-4)+'">'+n+'</text>';
-  });
-  var svg='<svg class="ms-chart" viewBox="0 0 '+W+' '+H+'">'
-    + grid + xlab
-    + '<path class="ms-line p" d="'+path('pleasure')+'"/>'
-    + '<path class="ms-line u" d="'+path('utility')+'"/>'
-    + '<path class="ms-line m" d="'+path('mood')+'"/>'
-    + dots('pleasure','ms-dot p') + dots('utility','ms-dot u') + dots('mood','ms-dot m')
-    + '</svg>';
+
+  var svg='<svg class="ms-chart" id="ms-svg" viewBox="0 0 '+W+' '+H+'">'
+    + grid + xlab + ylab + lines + points + '</svg>';
 
   var legend='<div class="ms-legend">'
-    + '<span class="ms-lg p">piacevolezza</span>'
-    + '<span class="ms-lg u">utilità</span>'
-    + '<span class="ms-lg m">mood</span></div>';
+    + MS_FIELDS.map(function(f){ return '<span class="ms-lg '+f.cls+'">'+f.lab+'</span>'; }).join('')
+    + '</div>';
 
   // ---- medie del mese ----
   function box(lab, val, extra){
@@ -864,11 +882,39 @@ function renderMonthStats(){
     return '<div class="tk-rc"><div class="tk-rc-lab">'+lab+'</div><div class="tk-rc-val">'+t+(extra||'')+'</div></div>';
   }
   var a=d.avg||{};
-  var mFace = a.mood==null ? '' : ' <span class="tk-rc-face '+moodClass(Math.round(a.mood))+'">'+moodFace(Math.round(a.mood))+'</span>';
+  var mFace = a.mood==null ? '' : ' <span class="tk-rc-face '+moodClass(Math.round(_clamp10(a.mood)))+'">'+moodFace(Math.round(_clamp10(a.mood)))+'</span>';
   var avgHTML='<div class="tk-recap-title">media del mese ('+(a.n||0)+' giorni votati)</div>'
     + '<div class="tk-recap-row">'+box('piacevolezza',a.pleasure)+box('utilità',a.utility)+box('mood',a.mood,mFace)+'</div>';
 
-  _setHTML(document.getElementById('ms-body'), svg + legend + '<div class="ms-avg">'+avgHTML+'</div>');
+  _setHTML(document.getElementById('ms-body'),
+    legend + '<div class="ms-chart-wrap">'+svg+'<div id="ms-tip" class="ms-tip hidden"></div></div>'
+    + '<div class="ms-avg">'+avgHTML+'</div>');
+  _wireMsDots();
+}
+
+// bolla con "cos'è + voto" al tap/hover su un pallino
+function _wireMsDots(){
+  var wrap=document.querySelector('.ms-chart-wrap'); if(!wrap) return;
+  var tip=document.getElementById('ms-tip');
+  var svg=document.getElementById('ms-svg');
+  function show(c){
+    tip.textContent = c.getAttribute('data-lab')+' '+c.getAttribute('data-val')+' · giorno '+c.getAttribute('data-day');
+    // posizione: converte le coordinate SVG in pixel del contenitore
+    var r=svg.getBoundingClientRect(), wr=wrap.getBoundingClientRect();
+    var vb=svg.viewBox.baseVal;
+    var px=(+c.getAttribute('cx'))/vb.width*r.width + (r.left-wr.left);
+    var py=(+c.getAttribute('cy'))/vb.height*r.height + (r.top-wr.top);
+    tip.classList.remove('hidden');
+    tip.style.left=Math.max(4, Math.min(px, wr.width-tip.offsetWidth-4))+'px';
+    tip.style.top=Math.max(0, py-tip.offsetHeight-8)+'px';
+  }
+  function hide(){ tip.classList.add('hidden'); }
+  Array.prototype.forEach.call(svg.querySelectorAll('.ms-dot'), function(c){
+    c.addEventListener('mouseenter', function(){ show(c); });
+    c.addEventListener('mouseleave', hide);
+    c.addEventListener('click', function(ev){ ev.stopPropagation(); show(c); });
+  });
+  svg.addEventListener('click', hide);   // tap altrove = chiudi la bolla
 }
 
 // ====== MODAL VOTI (unico) ======

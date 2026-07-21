@@ -453,8 +453,8 @@ body{
 .tk-votes{ grid-column:2; grid-row:1 / span 2; display:flex; gap:6px; align-items:center; }
 .tk-v{ font-family:'Patrick Hand',cursive; font-size:15px; padding:3px 9px; border-radius:12px; font-weight:700; white-space:nowrap; min-width:26px; text-align:center; }
 .tk-v.p{ background:#ffe39a; } .tk-v.u{ background:#bfe3ff; }
-/* mood: solo la faccina, sfondo colorato per fascia */
-.tk-v.m{ padding:2px 6px; font-size:17px; }
+/* mood: numero + faccina, sfondo colorato per fascia */
+.tk-v.m{ padding:3px 8px; font-size:15px; display:inline-flex; align-items:center; gap:3px; }
 .tk-v.m.m1{ background:#f6c3bc; } .tk-v.m.m3{ background:#fadcbe; }
 .tk-v.m.m5{ background:#f7ecb8; } .tk-v.m.m7{ background:#d5eec0; }
 .tk-v.m.m9{ background:#b8dfc0; }
@@ -508,15 +508,25 @@ body{
 .ms-body{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-top:6px; }
 .ms-loading{ font-family:'Patrick Hand',cursive; font-size:17px; color:var(--ink-soft);
   text-align:center; padding:40px 10px; font-style:italic; }
-.ms-chart{ width:100%; height:auto; display:block; }   /* proporzioni del viewBox, niente stiramento */
-.ms-grid{ stroke:rgba(0,0,0,.13); stroke-width:1; stroke-dasharray:3 3; }
+/* grafico RUOTATO: giorni in verticale, voti 1-10 in orizzontale.
+   width:100% + height:auto → si adatta alla larghezza mantenendo le proporzioni. */
+.ms-chart-wrap{ position:relative; }
+.ms-chart{ width:100%; height:auto; display:block; overflow:visible; }
+.ms-grid{ stroke:rgba(0,0,0,.10); stroke-width:1; stroke-dasharray:2 3; }
+.ms-grid.strong{ stroke:rgba(0,0,0,.22); stroke-dasharray:none; }
+.ms-rowline{ stroke:rgba(0,0,0,.06); stroke-width:1; }
 .ms-ylab, .ms-xlab{ font-family:'Patrick Hand',cursive; font-size:9px; fill:var(--ink-soft); }
 .ms-xlab{ text-anchor:middle; }
-.ms-line{ fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+.ms-ylab{ text-anchor:end; }
+.ms-line{ fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; opacity:.85; }
+/* bolla informativa al tap/hover su un pallino */
+.ms-tip{ position:absolute; z-index:4; pointer-events:none; white-space:nowrap;
+  background:var(--ink); color:var(--paper); font-family:'Patrick Hand',cursive; font-size:13px;
+  padding:4px 9px; border-radius:8px; box-shadow:0 3px 10px rgba(0,0,0,.35); }
 .ms-line.p{ stroke:#e0a32b; }     /* piacevolezza */
 .ms-line.u{ stroke:#3f86c4; }     /* utilità */
 .ms-line.m{ stroke:#5aa562; }     /* mood */
-.ms-dot{ stroke:none; }
+.ms-dot{ stroke:var(--paper); stroke-width:1; cursor:pointer; }
 .ms-dot.p{ fill:#e0a32b; } .ms-dot.u{ fill:#3f86c4; } .ms-dot.m{ fill:#5aa562; }
 .ms-legend{ display:flex; gap:14px; justify-content:center; margin:4px 0 2px; flex-wrap:wrap; }
 .ms-lg{ font-family:'Patrick Hand',cursive; font-size:13px; color:var(--ink-soft);
