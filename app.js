@@ -105,6 +105,7 @@ function boot(){
     var fresh={}; (d&&d.entries||[]).forEach(function(e){ fresh[e.slot]=e; });
     _trkCacheSet(_todayISO(), fresh); refreshBookmarkBadge();
   }).catch(function(){});
+  loadActivities();   // storico attività per l'autocomplete dei voti
 }
 function syncRange(from,to){
   var before = JSON.stringify(cache.entries);
@@ -727,10 +728,11 @@ function renderTracking(){
   (tkState.slots&&tkState.slots.length ? tkState.slots : _slotsFor(tkState.date)).forEach(function(slot){
     var rec=tkState.bySlot[slot];
     var past=_isPast(slot, tkState.date);
-    if(rec && (rec.pleasure!=null || rec.utility!=null || rec.activity)){
+    if(rec && (rec.pleasure!=null || rec.utility!=null || rec.mood!=null || rec.activity)){
       var votes='';
-      if(rec.pleasure!=null) votes+='<span class="tk-v p">'+emojiP(rec.pleasure)+' '+rec.pleasure+'</span>';
-      if(rec.utility!=null)  votes+='<span class="tk-v u">'+emojiU(rec.utility)+' '+rec.utility+'</span>';
+      if(rec.pleasure!=null) votes+='<span class="tk-v p">'+rec.pleasure+'</span>';
+      if(rec.utility!=null)  votes+='<span class="tk-v u">'+rec.utility+'</span>';
+      if(rec.mood!=null)     votes+='<span class="tk-v m '+moodClass(rec.mood)+'">'+moodFace(rec.mood)+'</span>';
       html+='<div class="tk-slot" onclick="openRate(\''+slot+'\')"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act">'+_esc(rec.activity||'(senza nota)')+'</div><div class="tk-votes">'+votes+'</div></div>';
     } else if(past){
       html+='<div class="tk-slot" onclick="openRate(\''+slot+'\')"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act empty">da votare…</div><div class="tk-votes"><span class="tk-add">+</span></div></div>';
@@ -739,13 +741,30 @@ function renderTracking(){
     }
   });
   _setHTML(document.getElementById('tk-slots'), html);   // riscrive solo se cambiato (niente flash)
+  _setHTML(document.getElementById('tk-recap'), _recapHTML());
 }
 
-function emojiP(v){ return v<=2?'💀':v<=4?'😩':v<=6?'😐':v<=8?'😎':'🔥'; }
-function emojiU(v){ return v<=2?'🗑️':v<=4?'🤏':v<=6?'👍':v<=8?'💪':'🚀'; }
+// recap in fondo: medie del GIORNO visualizzato (solo fasce votate)
+function _recapHTML(){
+  var recs=Object.keys(tkState.bySlot).map(function(k){ return tkState.bySlot[k]; });
+  function avg(field){
+    var v=recs.map(function(r){ return r&&r[field]; }).filter(function(x){ return x!=null && x!==''; });
+    if(!v.length) return null;
+    return v.reduce(function(a,b){ return a+(+b); },0)/v.length;
+  }
+  var p=avg('pleasure'), u=avg('utility'), m=avg('mood');
+  if(p==null && u==null && m==null) return '';
+  function one(lab, val, extra){
+    if(val==null) return '<div class="tk-rc"><div class="tk-rc-lab">'+lab+'</div><div class="tk-rc-val">—</div></div>';
+    return '<div class="tk-rc"><div class="tk-rc-lab">'+lab+'</div><div class="tk-rc-val">'+val.toFixed(1)+(extra||'')+'</div></div>';
+  }
+  var mFace = m==null ? '' : ' <span class="tk-rc-face '+moodClass(Math.round(m))+'">'+moodFace(Math.round(m))+'</span>';
+  return '<div class="tk-recap-title">media del giorno</div><div class="tk-recap-row">'
+    + one('piacevolezza', p) + one('utilità', u) + one('mood', m, mFace) + '</div>';
+}
 
 // ---- effetto bookmark: pulsa se OGGI ci sono fasce passate non votate ----
-function _slotVoted(rec){ return rec && (rec.pleasure!=null || rec.utility!=null || rec.activity); }
+function _slotVoted(rec){ return rec && (rec.pleasure!=null || rec.utility!=null || rec.mood!=null || rec.activity); }
 function refreshBookmarkBadge(){
   var bm=document.getElementById('bookmark'); if(!bm) return;
   var bySlot = _trkCacheGet(_todayISO()) || {};
@@ -754,8 +773,10 @@ function refreshBookmarkBadge(){
   bm.setAttribute('data-count', arretrate>0 ? arretrate : '');
 }
 
-// ====== MODAL 3-STEP (lazy) ======
-var rateState = { slot:null, step:1, timer:null, rec:null, chosen:[] };
+// ====== MODAL VOTI (unico) ======
+var rateState = { slot:null, rec:null, acIdx:-1 };
+// storico attività dal DB (per l'autocomplete), caricato una volta e riusato
+var actHistory = [];
 
 // minuti dall'inizio giornata per una 'HH:mm'
 function _hm(t){ var p=String(t).split(':'); return (+p[0])*60+(+p[1]); }
@@ -769,99 +790,137 @@ function _entriesInSlot(date, slot){
     var m=_hm(en.time); return m>=s && m<e;       // evento con orario dentro la fascia
   }).map(function(en){ return en.title; });
 }
-// ricompone il testo "Cosa1 + Cosa2 [+ testo libero]"
-function _rateComposeActivity(){
-  var free=document.getElementById('rate-act').value.trim();
-  var parts=rateState.chosen.slice();
-  if(free) parts.push(free);
-  return parts.join(' + ');
+// scarica lo storico attività dal foglio Tracking (non da localStorage: la cache si pulisce)
+function loadActivities(){
+  apiGet({ action:'getActivities' })
+    .then(function(list){ if(list&&list.length) actHistory=list; })
+    .catch(function(e){ console.warn('getActivities bg:',e.message); });
 }
-function _renderRateChips(){
-  var wrap=document.getElementById('rate-chips');
-  var sugg=_entriesInSlot(tkState.date, rateState.slot);
-  if(!sugg.length){ wrap.innerHTML=''; return; }
-  wrap.innerHTML = sugg.map(function(t){
-    var on=rateState.chosen.indexOf(t)>=0;
-    return '<button class="rate-chip'+(on?' on':'')+'" data-t="'+_esc(t)+'">'+_esc(t)+'</button>';
-  }).join('');
-  Array.prototype.forEach.call(wrap.querySelectorAll('.rate-chip'), function(b){
-    b.addEventListener('click', function(){
-      var t=b.getAttribute('data-t');
-      var i=rateState.chosen.indexOf(t);
-      if(i>=0) rateState.chosen.splice(i,1); else rateState.chosen.push(t);
-      _renderRateChips();
-    });
+
+// ---- autocomplete "cos'ho fatto" ----
+// L'input è UNO solo; i suggerimenti completano l'ULTIMO pezzo dopo l'ultimo ' + '.
+function _acParts(v){ return String(v).split('+'); }
+function _acCurrentTerm(){
+  var v=document.getElementById('rate-act').value;
+  var parts=_acParts(v);
+  return parts[parts.length-1].trim();
+}
+// candidati: eventi della fascia + storico DB, senza duplicati e senza quelli già scritti
+function _acCandidates(term){
+  var already=_acParts(document.getElementById('rate-act').value)
+    .slice(0,-1).map(function(s){ return s.trim().toLowerCase(); });
+  var pool=_entriesInSlot(tkState.date, rateState.slot).concat(actHistory);
+  var seen={}, out=[];
+  pool.forEach(function(t){
+    var k=String(t).trim(); if(!k) return;
+    var lk=k.toLowerCase();
+    if(seen[lk] || already.indexOf(lk)>=0) return;
+    if(term && lk.indexOf(term.toLowerCase())<0) return;   // filtra per quello che stai scrivendo
+    seen[lk]=true; out.push(k);
   });
+  return out.slice(0,6);
 }
+function _renderAC(){
+  var box=document.getElementById('rate-ac');
+  var list=_acCandidates(_acCurrentTerm());
+  rateState.acIdx=-1;
+  if(!list.length){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  box.innerHTML=list.map(function(t,i){
+    return '<button class="rate-ac-item" data-i="'+i+'" data-t="'+_esc(t)+'">'+_esc(t)+'</button>';
+  }).join('');
+  Array.prototype.forEach.call(box.querySelectorAll('.rate-ac-item'), function(b){
+    b.addEventListener('mousedown', function(ev){ ev.preventDefault(); _acPick(b.getAttribute('data-t')); });
+  });
+  box.classList.remove('hidden');
+}
+// completa l'ultimo pezzo e prepara il successivo con ' + '
+function _acPick(text){
+  var el=document.getElementById('rate-act');
+  var parts=_acParts(el.value);
+  parts[parts.length-1]=' '+text+' ';
+  el.value=parts.join('+').replace(/^\s+/,'')+'+ ';
+  el.focus();
+  _renderAC();
+}
+
+// mood 1-10 a fasce (scala presa da Ale): 1-2 pessimo … 9-10 stellare
+function moodFace(v){ return v<=2?'😖':v<=4?'🙁':v<=6?'😐':v<=8?'🙂':'😄'; }
+function moodClass(v){ return v<=2?'m1':v<=4?'m3':v<=6?'m5':v<=8?'m7':'m9'; }
+
 function openRate(slot){
-  rateState.slot=slot; rateState.step=1; rateState.chosen=[];
-  rateState.rec = tkState.bySlot[slot] || { date:tkState.date, slot:slot, activity:'', pleasure:null, utility:null };
+  rateState.slot=slot;
+  var ex = tkState.bySlot[slot];
+  rateState.rec = ex ? { date:tkState.date, slot:slot, id:ex.id, activity:ex.activity||'',
+                         pleasure:ex.pleasure, utility:ex.utility, mood:ex.mood }
+                     : { date:tkState.date, slot:slot, activity:'', pleasure:null, utility:null, mood:null };
   document.getElementById('rate-slot').textContent = slot.replace('-',' – ');
   document.getElementById('rate-act').value = rateState.rec.activity||'';
   document.getElementById('rate-pleasure').value = rateState.rec.pleasure||5;
   document.getElementById('rate-utility').value = rateState.rec.utility||5;
-  _renderRateChips();
-  _rateShowStep(1);
+  document.getElementById('rate-mood').value = rateState.rec.mood||5;
+  _rateSyncLabels();
+  document.getElementById('rate-ac').classList.add('hidden');
   document.getElementById('rate').classList.remove('hidden');
-  setTimeout(function(){ document.getElementById('rate-act').focus(); }, 80);
+  setTimeout(function(){ document.getElementById('rate-act').focus(); _renderAC(); }, 80);
 }
-function _rateShowStep(n){
-  rateState.step=n;
-  [1,2,3].forEach(function(i){ document.getElementById('rate-step'+i).classList.toggle('hidden', i!==n); });
-  var dots=document.querySelectorAll('.rate-dots .rd');
-  dots.forEach(function(dt,i){ dt.classList.toggle('on', i<n); });
-  _rateProg(0);
-  if(n===2){ _rateEmoji('p'); }
-  if(n===3){ _rateEmoji('u'); }
-}
-function _rateEmoji(which){
-  if(which==='p'){ var v=+document.getElementById('rate-pleasure').value; document.getElementById('rate-pleasure-val').textContent=v; document.getElementById('rate-emoji-p').textContent=emojiP(v); }
-  else { var u=+document.getElementById('rate-utility').value; document.getElementById('rate-utility-val').textContent=u; document.getElementById('rate-emoji-u').textContent=emojiU(u); }
-}
-// barra di avanzamento (riempie in 2s; a fine → step successivo)
-function _rateProg(reset){
-  var bar=document.getElementById('rate-prog-bar');
-  if(rateState.timer){ clearTimeout(rateState.timer); rateState.timer=null; }
-  bar.style.transition='none'; bar.style.width='0%';
-  if(reset) return; // step1: nessun auto-avanzamento (si avanza con Invio)
-}
-function _rateArm(){
-  // chiamata a ogni movimento slider: resetta e riavvia il conto di 2s
-  var bar=document.getElementById('rate-prog-bar');
-  if(rateState.timer) clearTimeout(rateState.timer);
-  bar.style.transition='none'; bar.style.width='0%';
-  void bar.offsetWidth; // reflow
-  bar.style.transition='width 2s linear'; bar.style.width='100%';
-  rateState.timer=setTimeout(function(){ _rateAdvance(); }, 2000);
-}
-function _rateAdvance(){
-  if(rateState.step===2){ rateState.rec.pleasure=+document.getElementById('rate-pleasure').value; _rateShowStep(3); }
-  else if(rateState.step===3){ rateState.rec.utility=+document.getElementById('rate-utility').value; _rateSaveClose(); }
-}
-function _rateSaveClose(){
-  if(rateState.timer) clearTimeout(rateState.timer);
-  var rec=rateState.rec;
-  tkState.bySlot[rec.slot]=rec; _trkCacheSet(tkState.date, tkState.bySlot);   // UI + cache subito
+function closeRate(){
   document.getElementById('rate').classList.add('hidden');
-  renderTracking(); refreshBookmarkBadge();
-  apiPost({ action:'setTracking', rec:rec }).then(function(saved){ if(saved){ tkState.bySlot[saved.slot]=saved; _trkCacheSet(tkState.date, tkState.bySlot); } }).catch(function(e){ console.warn('tracking save bg:',e.message); });
+  document.getElementById('rate-ac').classList.add('hidden');
 }
-// wiring eventi del modal rate
+// aggiorna numeri e faccina accanto alle etichette
+function _rateSyncLabels(){
+  var p=+document.getElementById('rate-pleasure').value;
+  var u=+document.getElementById('rate-utility').value;
+  var m=+document.getElementById('rate-mood').value;
+  document.getElementById('rate-pleasure-val').textContent=p;
+  document.getElementById('rate-utility-val').textContent=u;
+  var face=document.getElementById('rate-mood-face');
+  face.textContent=moodFace(m);
+  face.className='rate-face '+moodClass(m);
+  document.getElementById('rate-mood').className='rate-slider mood '+moodClass(m);
+}
+// salva: pulisce il testo dai ' + ' pendenti, scrive cache+UI subito, poi manda al backend
+function rateSave(){
+  var raw=document.getElementById('rate-act').value;
+  var act=raw.split('+').map(function(s){ return s.trim(); }).filter(function(s){ return s; }).join(' + ');
+  var rec=rateState.rec;
+  rec.activity=act;
+  rec.pleasure=+document.getElementById('rate-pleasure').value;
+  rec.utility=+document.getElementById('rate-utility').value;
+  rec.mood=+document.getElementById('rate-mood').value;
+  tkState.bySlot[rec.slot]=rec; _trkCacheSet(tkState.date, tkState.bySlot);   // UI + cache subito
+  closeRate();
+  renderTracking(); refreshBookmarkBadge();
+  apiPost({ action:'setTracking', rec:rec })
+    .then(function(saved){
+      if(saved){ tkState.bySlot[saved.slot]=saved; _trkCacheSet(tkState.date, tkState.bySlot); }
+      loadActivities();   // la nuova attività entra nello storico dei suggerimenti
+    })
+    .catch(function(e){ console.warn('tracking save bg:',e.message); });
+}
+// wiring modal voti
+document.getElementById('rate-act').addEventListener('input', _renderAC);
 document.getElementById('rate-act').addEventListener('keydown', function(e){
-  if(e.key==='Enter'){ e.preventDefault(); rateState.rec.activity=_rateComposeActivity(); _rateShowStep(2); /* niente _rateArm: il timer parte solo quando muovi lo slider */ }
+  var box=document.getElementById('rate-ac');
+  var items=box.querySelectorAll('.rate-ac-item');
+  if(e.key==='ArrowDown' && items.length){ e.preventDefault();
+    rateState.acIdx=Math.min(rateState.acIdx+1, items.length-1); _acHighlight(items); }
+  else if(e.key==='ArrowUp' && items.length){ e.preventDefault();
+    rateState.acIdx=Math.max(rateState.acIdx-1, 0); _acHighlight(items); }
+  else if(e.key==='Enter'){ e.preventDefault();
+    if(rateState.acIdx>=0 && items[rateState.acIdx]) _acPick(items[rateState.acIdx].getAttribute('data-t'));
+    else box.classList.add('hidden');
+  }
 });
-document.getElementById('rate-pleasure').addEventListener('input', function(){ _rateEmoji('p'); _rateArm(); });
-document.getElementById('rate-utility').addEventListener('input', function(){ _rateEmoji('u'); _rateArm(); });
-// chiusura tappando lo sfondo: conferma se incompleto
+function _acHighlight(items){
+  Array.prototype.forEach.call(items, function(it,i){ it.classList.toggle('on', i===rateState.acIdx); });
+}
+document.getElementById('rate-pleasure').addEventListener('input', _rateSyncLabels);
+document.getElementById('rate-utility').addEventListener('input', _rateSyncLabels);
+document.getElementById('rate-mood').addEventListener('input', _rateSyncLabels);
+// tap sullo sfondo = chiudi senza salvare (c'è il bottone Salva)
 document.getElementById('rate').addEventListener('click', function(e){
-  if(e.target!==this) return; // solo click sullo sfondo
-  if(rateState.timer) clearTimeout(rateState.timer);
-  var partial = (rateState.step<3) || rateState.rec.utility==null;
-  if(partial){ if(!confirm('Salvare quello che hai messo finora?')){ document.getElementById('rate').classList.add('hidden'); return; } }
-  if(rateState.step>=2) rateState.rec.pleasure=+document.getElementById('rate-pleasure').value;
-  if(rateState.step>=3) rateState.rec.utility=+document.getElementById('rate-utility').value;
-  rateState.rec.activity=_rateComposeActivity();
-  _rateSaveClose();
+  if(e.target===this) closeRate();
 });
 
 // ====== service worker (PWA) ======
