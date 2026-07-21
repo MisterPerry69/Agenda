@@ -508,7 +508,7 @@ body{
 .ms-body{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-top:6px; }
 .ms-loading{ font-family:'Patrick Hand',cursive; font-size:17px; color:var(--ink-soft);
   text-align:center; padding:40px 10px; font-style:italic; }
-/* grafico RUOTATO: giorni in verticale, voti 1-10 in orizzontale.
+/* grafico: giorni sull'asse X (sotto), voti 1-10 sull'asse Y con etichette a DESTRA.
    width:100% + height:auto → si adatta alla larghezza mantenendo le proporzioni. */
 .ms-chart-wrap{ position:relative; }
 .ms-chart{ width:100%; height:auto; display:block; overflow:visible; }
@@ -517,7 +517,7 @@ body{
 .ms-rowline{ stroke:rgba(0,0,0,.06); stroke-width:1; }
 .ms-ylab, .ms-xlab{ font-family:'Patrick Hand',cursive; font-size:9px; fill:var(--ink-soft); }
 .ms-xlab{ text-anchor:middle; }
-.ms-ylab{ text-anchor:end; }
+.ms-ylab{ text-anchor:start; }   /* numeri dei voti a DESTRA del grafico */
 .ms-line{ fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; opacity:.85; }
 /* bolla informativa al tap/hover su un pallino */
 .ms-tip{ position:absolute; z-index:4; pointer-events:none; white-space:nowrap;

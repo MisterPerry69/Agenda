@@ -817,28 +817,27 @@ function renderMonthStats(){
   var byNum={};
   d.days.forEach(function(x){ byNum[+x.date.split('-')[2]]=x; });
 
-  // ---- grafico RUOTATO: giorni sull'asse VERTICALE, voti 1-10 su quello ORIZZONTALE.
-  // Sfrutta la verticalità del telefono; tutti i giorni entrano in una schermata.
-  var ROW=16;                                   // altezza per giorno
-  var PL=20, PR=10, PT=16, PB=20;               // padding (PL = spazio numeri giorno)
-  var W=300, H=PT+PB+daysInMonth*ROW;
-  var iw=W-PL-PR;
-  function X(v){ return PL + (v-1)/9*iw; }      // voto 1..10 → sinistra..destra
-  function Y(n){ return PT + (n-0.5)*ROW; }     // giorno n al centro della sua riga
+  // ---- grafico ORIZZONTALE: giorni sull'asse X (sotto), voti 1-10 sull'asse Y
+  // con le etichette dei valori a DESTRA.
+  var COL=11;                                   // larghezza per giorno
+  var PL=6, PR=20, PT=10, PB=18;                // PR = spazio numeri voto (a destra)
+  var W=PL+PR+daysInMonth*COL, H=190;
+  var ih=H-PT-PB;
+  function X(n){ return PL + (n-0.5)*COL; }     // giorno n al centro della sua colonna
+  function Y(v){ return PT + (10-v)/9*ih; }     // voto 1..10 → basso..alto
 
-  // griglia verticale su OGNI valore 1..10 + numeri sotto e sopra
-  var grid='', xlab='';
+  // griglia orizzontale su OGNI valore 1..10 + numeri A DESTRA
+  var grid='', ylab='';
   for(var v=1; v<=10; v++){
     var strong=(v===1||v===5||v===10);
-    grid+='<line class="ms-grid'+(strong?' strong':'')+'" x1="'+X(v).toFixed(1)+'" y1="'+PT+'" x2="'+X(v).toFixed(1)+'" y2="'+(H-PB).toFixed(1)+'"/>';
-    xlab+='<text class="ms-xlab" x="'+X(v).toFixed(1)+'" y="'+(PT-5)+'">'+v+'</text>'
-        + '<text class="ms-xlab" x="'+X(v).toFixed(1)+'" y="'+(H-6)+'">'+v+'</text>';
+    grid+='<line class="ms-grid'+(strong?' strong':'')+'" x1="'+PL+'" y1="'+Y(v).toFixed(1)+'" x2="'+(W-PR).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'"/>';
+    ylab+='<text class="ms-ylab" x="'+(W-PR+4).toFixed(1)+'" y="'+(Y(v)+3).toFixed(1)+'">'+v+'</text>';
   }
-  // etichette giorni (TUTTE) + riga tenue per giorno
-  var ylab='';
+  // etichette giorni: TUTTI i numeri sotto (alternati su 2 righe per non sovrapporsi)
+  var xlab='';
   for(var n=1;n<=daysInMonth;n++){
-    ylab+='<text class="ms-ylab" x="'+(PL-6)+'" y="'+(Y(n)+3).toFixed(1)+'">'+n+'</text>';
-    if(byNum[n]) ylab+='<line class="ms-rowline" x1="'+PL+'" y1="'+Y(n).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(n).toFixed(1)+'"/>';
+    var y = (n%2===1) ? (H-9) : (H-1);          // dispari sopra, pari sotto
+    xlab+='<text class="ms-xlab" x="'+X(n).toFixed(1)+'" y="'+y+'">'+n+'</text>';
   }
 
   function path(field){
@@ -847,7 +846,7 @@ function renderMonthStats(){
       var rec=byNum[n];
       var v=rec ? _clamp10(rec[field]) : null;
       if(v==null){ started=false; continue; }    // giorno non votato: spezza la linea
-      out += (started?' L':' M') + X(v).toFixed(1) + ' ' + Y(n).toFixed(1);
+      out += (started?' L':' M') + X(n).toFixed(1) + ' ' + Y(v).toFixed(1);
       started=true;
     }
     return out.trim();
@@ -858,7 +857,7 @@ function renderMonthStats(){
     for(var n=1;n<=daysInMonth;n++){
       var rec=byNum[n]; if(!rec) continue;
       var v=_clamp10(rec[f.k]); if(v==null) continue;
-      s+='<circle class="ms-dot '+f.cls+'" cx="'+X(v).toFixed(1)+'" cy="'+Y(n).toFixed(1)+'" r="3.4"'
+      s+='<circle class="ms-dot '+f.cls+'" cx="'+X(n).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="3"'
        + ' data-lab="'+f.lab+'" data-val="'+(Math.round(rec[f.k]*10)/10)+'" data-day="'+n+'"/>';
     }
     return s;
