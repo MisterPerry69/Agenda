@@ -473,7 +473,8 @@ body{
 .rate-field{ text-align:left; margin:14px 0; }
 .rate-q{ font-size:19px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
 .rate-num{ margin-left:auto; font-weight:700; font-size:22px; color:var(--red); }
-.rate-face{ margin-left:auto; font-size:26px; line-height:1; }
+/* nel mood il numero ha già margin-left:auto → la faccina lo segue subito */
+.rate-face{ font-size:26px; line-height:1; }
 .rate-input{ width:100%; font-family:'Patrick Hand',cursive; font-size:19px; color:var(--ink);
   background:transparent; border:none; border-bottom:2px solid #d8d2c0; padding:8px 2px; }
 .rate-input:focus{ outline:none; border-bottom-color:var(--ink); }
@@ -502,6 +503,29 @@ body{
   padding:9px 22px; border-radius:8px; border:2px solid var(--ink); background:transparent; color:var(--ink); }
 .rate-save{ background:var(--ink); color:var(--paper); }
 .rate-cancel{ border-color:transparent; color:var(--ink-soft); }
+
+/* ===================== RIEPILOGO MENSILE (grafico 3 linee) ===================== */
+.ms-body{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-top:6px; }
+.ms-loading{ font-family:'Patrick Hand',cursive; font-size:17px; color:var(--ink-soft);
+  text-align:center; padding:40px 10px; font-style:italic; }
+.ms-chart{ width:100%; height:auto; display:block; }   /* proporzioni del viewBox, niente stiramento */
+.ms-grid{ stroke:rgba(0,0,0,.13); stroke-width:1; stroke-dasharray:3 3; }
+.ms-ylab, .ms-xlab{ font-family:'Patrick Hand',cursive; font-size:9px; fill:var(--ink-soft); }
+.ms-xlab{ text-anchor:middle; }
+.ms-line{ fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+.ms-line.p{ stroke:#e0a32b; }     /* piacevolezza */
+.ms-line.u{ stroke:#3f86c4; }     /* utilità */
+.ms-line.m{ stroke:#5aa562; }     /* mood */
+.ms-dot{ stroke:none; }
+.ms-dot.p{ fill:#e0a32b; } .ms-dot.u{ fill:#3f86c4; } .ms-dot.m{ fill:#5aa562; }
+.ms-legend{ display:flex; gap:14px; justify-content:center; margin:4px 0 2px; flex-wrap:wrap; }
+.ms-lg{ font-family:'Patrick Hand',cursive; font-size:13px; color:var(--ink-soft);
+  display:flex; align-items:center; gap:5px; }
+.ms-lg::before{ content:""; width:14px; height:3px; border-radius:2px; }
+.ms-lg.p::before{ background:#e0a32b; }
+.ms-lg.u::before{ background:#3f86c4; }
+.ms-lg.m::before{ background:#5aa562; }
+.ms-avg{ margin-top:14px; padding-top:10px; border-top:2px dashed rgba(0,0,0,.18); }
 
 /* ---- recap medie del giorno (in fondo alla vista tracking) ---- */
 .tk-recap{ flex-shrink:0; margin-top:8px; padding-top:10px; border-top:2px dashed rgba(0,0,0,.18); }

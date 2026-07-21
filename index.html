@@ -119,6 +119,18 @@
     </div>
   </div>
 
+  <!-- RIEPILOGO MENSILE (grafico 3 linee + medie) — si apre dal bookmark in vista MESE -->
+  <div id="monthstats" class="tracking hidden">
+    <div class="tk-page">
+      <header class="tk-head">
+        <div id="ms-title" class="tk-title">—</div>
+        <button class="tk-close" onclick="closeMonthStats()">✕</button>
+      </header>
+      <div class="tk-rule"></div>
+      <div id="ms-body" class="ms-body"></div>
+    </div>
+  </div>
+
   <!-- MODAL VOTI (unico, non più a step) -->
   <div id="rate" class="rate hidden">
     <div class="rate-card">
@@ -144,7 +156,7 @@
       </div>
 
       <div class="rate-field">
-        <div class="rate-q">Mood <span id="rate-mood-face" class="rate-face">😐</span></div>
+        <div class="rate-q">Mood <span id="rate-mood-val" class="rate-num">5</span><span id="rate-mood-face" class="rate-face">😐</span></div>
         <input id="rate-mood" class="rate-slider mood" type="range" min="1" max="10" value="5">
       </div>
 

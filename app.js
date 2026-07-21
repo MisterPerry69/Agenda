@@ -702,7 +702,10 @@ function _isPast(slot, date){
 function _trkCacheGet(date){ try{ return JSON.parse(localStorage.getItem('ql_trk_'+date)||'null'); }catch(e){ return null; } }
 function _trkCacheSet(date, bySlot){ try{ localStorage.setItem('ql_trk_'+date, JSON.stringify(bySlot)); }catch(e){} }
 
+// Il bookmark è CONTESTUALE: in vista mese apre il riepilogo mensile,
+// in giorno/settimana apre i voti del giorno.
 function openTracking(){
+  if(state.view==='month') return openMonthStats();
   tkState.date = state.anchor;
   tkState.slots = _slotsFor(tkState.date);             // fasce del giorno (feriale/weekend)
   tkState.bySlot = _trkCacheGet(tkState.date) || {};   // subito dalla cache (niente vuoto)
@@ -773,6 +776,101 @@ function refreshBookmarkBadge(){
   bm.setAttribute('data-count', arretrate>0 ? arretrate : '');
 }
 
+// ====== RIEPILOGO MENSILE (grafico 3 linee + medie) ======
+// Si apre dal bookmark quando sei in vista MESE. Sola lettura.
+var msState = { from:null, to:null, data:null };
+
+function openMonthStats(){
+  var r=_rangeFor('month', state.anchor);
+  msState.from=r.from; msState.to=r.to; msState.data=null;
+  var p=state.anchor.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
+  _setHTML(document.getElementById('ms-title'),
+    '<span>'+MESI[d.getMonth()].toUpperCase()+'</span><span class="sub">'+d.getFullYear()+'</span>');
+  document.getElementById('monthstats').classList.remove('hidden');
+  _setHTML(document.getElementById('ms-body'), '<div class="ms-loading">carico…</div>');
+  apiGet({ action:'getTrackingRange', from:r.from, to:r.to })
+    .then(function(d2){ msState.data=d2; renderMonthStats(); })
+    .catch(function(e){
+      _setHTML(document.getElementById('ms-body'), '<div class="ms-loading">niente dati (rete?)</div>');
+      console.warn('range bg:',e.message);
+    });
+}
+function closeMonthStats(){ document.getElementById('monthstats').classList.add('hidden'); }
+
+function renderMonthStats(){
+  var d=msState.data;
+  if(!d || !d.days || !d.days.length){
+    _setHTML(document.getElementById('ms-body'), '<div class="ms-loading">nessun voto questo mese</div>');
+    return;
+  }
+  var daysInMonth=+msState.to.split('-')[2];
+  // indicizza per numero-giorno
+  var byNum={};
+  d.days.forEach(function(x){ byNum[+x.date.split('-')[2]]=x; });
+
+  // ---- grafico SVG: 3 linee (piacevolezza, utilità, mood) su scala 1-10 ----
+  var W=320, H=150, PL=22, PR=6, PT=8, PB=18;   // padding interni
+  var iw=W-PL-PR, ih=H-PT-PB;
+  function X(n){ return PL + (daysInMonth<=1?0:(n-1)/(daysInMonth-1)*iw); }
+  function Y(v){ return PT + (10-v)/9*ih; }      // scala 1..10 → alto..basso
+  function path(field){
+    var seg=[], started=false, out='';
+    for(var n=1;n<=daysInMonth;n++){
+      var rec=byNum[n];
+      var v=rec && rec[field]!=null ? rec[field] : null;
+      if(v==null){ started=false; continue; }     // buco: spezza la linea
+      out += (started?' L':' M') + X(n).toFixed(1) + ' ' + Y(v).toFixed(1);
+      started=true;
+    }
+    return out.trim();
+  }
+  function dots(field, cls){
+    var s='';
+    for(var n=1;n<=daysInMonth;n++){
+      var rec=byNum[n]; var v=rec && rec[field]!=null ? rec[field] : null;
+      if(v==null) continue;
+      s+='<circle class="'+cls+'" cx="'+X(n).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="2.2"/>';
+    }
+    return s;
+  }
+  // griglia orizzontale a 2/5/8 + etichette
+  var grid='';
+  [2,5,8].forEach(function(v){
+    grid+='<line class="ms-grid" x1="'+PL+'" y1="'+Y(v).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(v).toFixed(1)+'"/>'
+       +  '<text class="ms-ylab" x="2" y="'+(Y(v)+3).toFixed(1)+'">'+v+'</text>';
+  });
+  // etichette giorni (1, 10, 20, ultimo)
+  var xlab='';
+  [1,10,20,daysInMonth].forEach(function(n){
+    if(n>daysInMonth) return;
+    xlab+='<text class="ms-xlab" x="'+X(n).toFixed(1)+'" y="'+(H-4)+'">'+n+'</text>';
+  });
+  var svg='<svg class="ms-chart" viewBox="0 0 '+W+' '+H+'">'
+    + grid + xlab
+    + '<path class="ms-line p" d="'+path('pleasure')+'"/>'
+    + '<path class="ms-line u" d="'+path('utility')+'"/>'
+    + '<path class="ms-line m" d="'+path('mood')+'"/>'
+    + dots('pleasure','ms-dot p') + dots('utility','ms-dot u') + dots('mood','ms-dot m')
+    + '</svg>';
+
+  var legend='<div class="ms-legend">'
+    + '<span class="ms-lg p">piacevolezza</span>'
+    + '<span class="ms-lg u">utilità</span>'
+    + '<span class="ms-lg m">mood</span></div>';
+
+  // ---- medie del mese ----
+  function box(lab, val, extra){
+    var t = val==null ? '—' : val.toFixed(1);
+    return '<div class="tk-rc"><div class="tk-rc-lab">'+lab+'</div><div class="tk-rc-val">'+t+(extra||'')+'</div></div>';
+  }
+  var a=d.avg||{};
+  var mFace = a.mood==null ? '' : ' <span class="tk-rc-face '+moodClass(Math.round(a.mood))+'">'+moodFace(Math.round(a.mood))+'</span>';
+  var avgHTML='<div class="tk-recap-title">media del mese ('+(a.n||0)+' giorni votati)</div>'
+    + '<div class="tk-recap-row">'+box('piacevolezza',a.pleasure)+box('utilità',a.utility)+box('mood',a.mood,mFace)+'</div>';
+
+  _setHTML(document.getElementById('ms-body'), svg + legend + '<div class="ms-avg">'+avgHTML+'</div>');
+}
+
 // ====== MODAL VOTI (unico) ======
 var rateState = { slot:null, rec:null, acIdx:-1 };
 // storico attività dal DB (per l'autocomplete), caricato una volta e riusato
@@ -822,8 +920,11 @@ function _acCandidates(term){
 }
 function _renderAC(){
   var box=document.getElementById('rate-ac');
-  var list=_acCandidates(_acCurrentTerm());
+  var term=_acCurrentTerm();
   rateState.acIdx=-1;
+  // la tendina compare SOLO mentre stai digitando (almeno 1 lettera), non a campo vuoto
+  if(!term){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  var list=_acCandidates(term);
   if(!list.length){ box.classList.add('hidden'); box.innerHTML=''; return; }
   box.innerHTML=list.map(function(t,i){
     return '<button class="rate-ac-item" data-i="'+i+'" data-t="'+_esc(t)+'">'+_esc(t)+'</button>';
@@ -833,14 +934,16 @@ function _renderAC(){
   });
   box.classList.remove('hidden');
 }
-// completa l'ultimo pezzo e prepara il successivo con ' + '
+// completa l'ultimo pezzo scritto, SENZA aggiungere il '+' (che darebbe fastidio quando
+// l'attività è una sola). Per aggiungerne un'altra basta digitare ' + ' o premere il tasto '+'.
 function _acPick(text){
   var el=document.getElementById('rate-act');
   var parts=_acParts(el.value);
-  parts[parts.length-1]=' '+text+' ';
-  el.value=parts.join('+').replace(/^\s+/,'')+'+ ';
+  parts[parts.length-1]=' '+text;
+  el.value=parts.join('+').replace(/^\s+/,'');
   el.focus();
-  _renderAC();
+  var box=document.getElementById('rate-ac');
+  box.classList.add('hidden'); box.innerHTML=''; rateState.acIdx=-1;   // scelto: chiudi
 }
 
 // mood 1-10 a fasce (scala presa da Ale): 1-2 pessimo … 9-10 stellare
@@ -861,7 +964,7 @@ function openRate(slot){
   _rateSyncLabels();
   document.getElementById('rate-ac').classList.add('hidden');
   document.getElementById('rate').classList.remove('hidden');
-  setTimeout(function(){ document.getElementById('rate-act').focus(); _renderAC(); }, 80);
+  setTimeout(function(){ document.getElementById('rate-act').focus(); }, 80);
 }
 function closeRate(){
   document.getElementById('rate').classList.add('hidden');
@@ -874,6 +977,7 @@ function _rateSyncLabels(){
   var m=+document.getElementById('rate-mood').value;
   document.getElementById('rate-pleasure-val').textContent=p;
   document.getElementById('rate-utility-val').textContent=u;
+  document.getElementById('rate-mood-val').textContent=m;
   var face=document.getElementById('rate-mood-face');
   face.textContent=moodFace(m);
   face.className='rate-face '+moodClass(m);
