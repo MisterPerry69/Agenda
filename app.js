@@ -107,15 +107,29 @@ function boot(){
   }).catch(function(){});
   loadActivities();   // storico attività per l'autocomplete dei voti
 }
+// chiave di contenuto per riconoscere una pending già confermata sul server
+// (stessa data+ora+titolo) anche se l'id locale (tmp_...) non corrisponde più:
+// succede quando la risposta di addEntry/updateEntry non torna mai al client
+// (app chiusa/sospesa a metà richiesta su mobile) ma il salvataggio è comunque
+// andato a buon fine lato GAS.
+function _contentKey(e){ return e.date+'|'+e.time+'|'+e.title; }
 function syncRange(from,to){
   var before = JSON.stringify(cache.entries);
   apiGet({ action:'getAgenda', from:from, to:to })
     .then(function(rows){
+      var freshKeys = {};
+      (rows||[]).forEach(function(r){ freshKeys[_contentKey(r)]=true; });
       // rimpiazza le voci dell'intervallo con quelle del server,
-      // MA conserva quelle ancora "pending" (scrittura non confermata).
+      // MA conserva quelle ancora "pending" (scrittura non confermata) —
+      // a meno che il server non mostri già una voce equivalente: in tal
+      // caso la pending è un doppione fantasma (conferma persa) e va scartata.
       var keep = cache.entries.filter(function(e){
-        if(cache.pending.indexOf(e.id)>=0) return true;        // pending: non toccare
-        return e.date<from || e.date>to;                        // fuori intervallo: resta
+        if(cache.pending.indexOf(e.id)>=0){
+          if(freshKeys[_contentKey(e)]){ _clearPending(e.id); return false; }
+          return true;
+        }
+        var en = e.dateEnd || e.date;                           // intersezione, non solo e.date
+        return en<from || e.date>to;                            // fuori intervallo: resta
       });
       cache.entries = keep.concat(rows||[]);
       cache.loadedAt = Date.now(); _saveCache();
