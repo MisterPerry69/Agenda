@@ -42,9 +42,14 @@ var state = { view:'day', anchor:_todayISO(), editing:null, selCat:'work' };
 // La cache si popola dietro la cover e si riallinea col backend in background.
 // `pending`: id di voci con una scrittura non ancora confermata dal server.
 // Il sync NON deve mai cancellarle (altrimenti "inserisco e ricaricando sparisce").
-var cache = { entries: [], pending: [], loadedAt: 0 };
+// loadedMonths: insieme (oggetto usato come Set) delle chiavi 'yyyy-MM' già
+// scaricate dal server almeno una volta. Traccia la copertura per singolo mese
+// (non un unico intervallo continuo) così eventuali "buchi" nella cronologia di
+// caricamento non vengono mai scambiati per range coperti (vedi _ensureRangeLoaded).
+var cache = { entries: [], pending: [], loadedAt: 0, loadedMonths: {} };
 function _loadCache(){
-  try{ var c = JSON.parse(localStorage.getItem('ql_cache')||'null'); if(c&&c.entries){ cache=c; if(!cache.pending) cache.pending=[]; } }catch(e){}
+  try{ var c = JSON.parse(localStorage.getItem('ql_cache')||'null'); if(c&&c.entries){ cache=c; if(!cache.pending) cache.pending=[];
+    if(!cache.loadedMonths) cache.loadedMonths={}; } }catch(e){}
 }
 function _saveCache(){ try{ localStorage.setItem('ql_cache', JSON.stringify(cache)); }catch(e){} }
 function _markPending(id){ if(cache.pending.indexOf(id)<0) cache.pending.push(id); }
@@ -53,6 +58,9 @@ function _clearPending(id){ cache.pending = cache.pending.filter(function(x){ re
 function _sortKey(e){ return e.date + (e.time ? e.time : '99:99'); }
 // un evento occupa più giorni?
 function _isMulti(e){ return !!e.dateEnd && e.dateEnd > e.date; }
+// todo vero = niente orario, non multi-giorno, e non è un all-day di una serie
+// ricorrente (quello ha semplicemente time vuoto per design, non è "da fare").
+function _isTodoEntry(e){ return !e.time && !_isMulti(e) && !e.allDay; }
 // posizione dell'evento nel giorno k: 'single' | 'start' | 'mid' | 'end'
 function _dayPos(e, k){
   if(!_isMulti(e)) return 'single';
@@ -62,7 +70,8 @@ function _dayPos(e, k){
 }
 // etichetta orario/marcatore da mostrare nel giorno k
 function _dayTimeLabel(e, k){
-  if(!e.time && !_isMulti(e)) return 'todo';
+  if(_isTodoEntry(e)) return 'todo';
+  if(!e.time && !_isMulti(e)) return 'tutto il giorno';   // ricorrenza all-day
   var pos=_dayPos(e,k);
   if(pos==='single') return e.time + (e.timeEnd?('–'+e.timeEnd):'');
   if(pos==='start')  return '▶ '+(e.time||'');
@@ -125,6 +134,13 @@ function boot(){
 // (app chiusa/sospesa a metà richiesta su mobile) ma il salvataggio è comunque
 // andato a buon fine lato GAS.
 function _contentKey(e){ return e.date+'|'+e.time+'|'+e.title; }
+// tutte le chiavi 'yyyy-MM' toccate da [from,to], per marcarle come scaricate
+function _monthKeysBetween(from, to){
+  var keys=[]; var p=from.split('-'); var d=new Date(+p[0],+p[1]-1,1);
+  var end=to.split('-'); var endD=new Date(+end[0],+end[1]-1,1);
+  while(d<=endD){ keys.push(d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)); d.setMonth(d.getMonth()+1); }
+  return keys;
+}
 function syncRange(from,to){
   var before = JSON.stringify(cache.entries);
   apiGet({ action:'getAgenda', from:from, to:to })
@@ -144,31 +160,37 @@ function syncRange(from,to){
         return en<from || e.date>to;                            // fuori intervallo: resta
       });
       cache.entries = keep.concat(rows||[]);
-      cache.loadedAt = Date.now(); _saveCache();
+      cache.loadedAt = Date.now();
+      _monthKeysBetween(from,to).forEach(function(k){ cache.loadedMonths[k]=true; });
+      _saveCache();
       // ridisegna SOLO se i dati sono davvero cambiati → niente flicker/refresh inutile
       if(JSON.stringify(cache.entries)!==before) render();
       _checkSeriesRenewal();
     })
     .catch(function(e){ console.warn('sync fallita (uso cache):', e.message); });
 }
+// se la vista richiesta tocca mesi mai scaricati (es. navighi 2+ anni avanti su
+// una serie ricorrente lunga), li scarica al volo. Fix del bug "impegno sparito
+// nel futuro lontano": il dato esiste sul server, semplicemente il client non
+// l'aveva ancora richiesto perché fuori dalla finestra di caricamento iniziale.
+function _ensureRangeLoaded(from, to){
+  var missing = _monthKeysBetween(from,to).filter(function(k){ return !cache.loadedMonths[k]; });
+  if(missing.length) syncRange(from, to);
+}
 
 // ====== RINNOVO SERIE RICORRENTI ======
-// tiene traccia (per sessione, non persistito) delle serie già proposte per rinnovo
-// in questo giro di apertura app, per non riproporre lo stesso popup più volte di fila
-// mentre l'utente sta ancora decidendo su un'altra serie.
+// Calcolato SEMPRE lato server (getSeriesNeedingRenewal legge l'intero sheet):
+// la cache locale copre solo una finestra di date, quindi ragionare sull'ultima
+// occorrenza vista dal client porterebbe a valutare la riga sbagliata per serie
+// più lunghe della finestra caricata (bug corretto: il popup non si placava mai).
 var _renewQueue = [];
 var _renewShowing = null;
 
 function _checkSeriesRenewal(){
-  var today=_todayISO();
-  var bySeries={};
-  cache.entries.forEach(function(e){
-    if(!e.seriesId || e._deleted) return;
-    if(!bySeries[e.seriesId] || e.seriesSeq > bySeries[e.seriesId].seriesSeq) bySeries[e.seriesId]=e;
-  });
-  _renewQueue = Object.keys(bySeries).map(function(k){ return bySeries[k]; })
-    .filter(function(last){ return last.seriesRule && last.date <= today; });
-  _showNextRenewPrompt();
+  apiGet({ action:'getSeriesNeedingRenewal' }).then(function(list){
+    _renewQueue = list||[];
+    _showNextRenewPrompt();
+  }).catch(function(e){ console.warn('checkSeriesRenewal bg:',e.message); });
 }
 function _showNextRenewPrompt(){
   if(_renewShowing || !_renewQueue.length) return;
@@ -181,9 +203,18 @@ function renewConfirm(){
   var last=_renewShowing;
   document.getElementById('renew-modal').classList.add('hidden'); _renewShowing=null;
   if(!last) return;
-  var count = last.seriesRule.freq==='year' ? 40 : 12;
+  var count = last.freq==='year' ? 40 : 12;
   apiPost({ action:'renewSeries', seriesId:last.seriesId, count:count })
-    .then(function(created){ (created||[]).forEach(function(e){ _upsert(e); }); render(); _showNextRenewPrompt(); })
+    .then(function(created){
+      // le nuove occorrenze potrebbero cadere fuori dalla finestra già in cache:
+      // aggiungile solo se il mese è già coperto, altrimenti la prossima
+      // navigazione lì le scaricherà da sola via _ensureRangeLoaded.
+      (created||[]).forEach(function(e){
+        var mk=e.date.slice(0,7);
+        if(cache.loadedMonths[mk]) _upsert(e);
+      });
+      render(); _showNextRenewPrompt();
+    })
     .catch(function(e){ console.warn('renew bg:',e.message); _showNextRenewPrompt(); });
 }
 function renewDecline(){
@@ -191,7 +222,7 @@ function renewDecline(){
   document.getElementById('renew-modal').classList.add('hidden'); _renewShowing=null;
   if(!last) return;
   apiPost({ action:'declineSeries', seriesId:last.seriesId })
-    .then(function(){ last.seriesRule=null; _upsert(last); _showNextRenewPrompt(); })
+    .then(function(){ _showNextRenewPrompt(); })
     .catch(function(e){ console.warn('decline bg:',e.message); _showNextRenewPrompt(); });
 }
 
@@ -225,6 +256,7 @@ function _setHTML(el, html){ if(el.innerHTML===html){ return false; } el.innerHT
 function render(){
   document.getElementById('ag-title').innerHTML = _titleFor();
   var r=_rangeFor(state.view,state.anchor);
+  _ensureRangeLoaded(r.from, r.to);   // scarica al volo se navighi fuori dalla finestra già in cache
   var rows=_entriesIn(r.from,r.to);
   if(state.view==='day') return renderDay(rows);
   if(state.view==='week') return renderWeek(rows);
@@ -237,7 +269,7 @@ function renderDay(rows){
   if(!rows.length){ _setHTML(body,'<div class="ag-empty">Niente per oggi.<br>Doppio tap per aggiungere.</div>'); return; }
   var html = rows.map(function(e){
     var pin=e.onGoogle?'<span class="ag-pin">📌</span>':'';
-    var todo=!e.time && !_isMulti(e);
+    var todo=_isTodoEntry(e);
     var lbl=_dayTimeLabel(e, state.anchor);
     var timeCol = todo ? '<span class="ag-time ag-todo" data-act="edit">todo</span>'
                        : '<span class="ag-time" data-act="edit">'+lbl+'</span>';
@@ -404,22 +436,6 @@ function toggleDone(id){
 document.getElementById('editor').addEventListener('click', function(ev){
   if(ev.target.id==='editor' && document.activeElement) document.activeElement.blur();
 });
-
-// Mantiene l'editor ancorato SOPRA la tastiera: su Android/Chrome il layout
-// viewport non si restringe quando appare la tastiera (solo quello "visivo"),
-// quindi un semplice position:fixed la lascia coperta. Si legge l'altezza
-// occupata dalla tastiera da visualViewport e si spinge su la card di quanto.
-(function(){
-  if(!window.visualViewport) return;
-  var card = document.querySelector('#editor .editor-card');
-  function reflow(){
-    var vv = window.visualViewport;
-    var keyboardGap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-    card.style.marginBottom = keyboardGap + 'px';
-  }
-  window.visualViewport.addEventListener('resize', reflow);
-  window.visualViewport.addEventListener('scroll', reflow);
-})();
 
 // ====== EDITOR ======
 // toggle a bottone-emoji (niente checkbox): stato letto/scritto via classe .active
@@ -627,7 +643,7 @@ function saveEntry(){
     if(state.editing && state.editing.seriesId){
       // modifica di un'occorrenza esistente: chiede scope, poi propaga
       var entryMod={ id:state.editing.id, seriesId:state.editing.seriesId, date:recStart, time:recTime,
-        title:title, category:state.selCat, onGoogle:onGoogleRec,
+        title:title, category:state.selCat, onGoogle:onGoogleRec, allDay:allDay,
         reminders:REC_DEFAULT_REMINDERS.slice(),
         eventId:state.editing.eventId, done:state.editing.done||false, dateEnd:'', timeEnd:'' };
       closeEditor();

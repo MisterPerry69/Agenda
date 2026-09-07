@@ -20,6 +20,8 @@
   --hl-orange: #ffb86b;          /* casa */
   --hl-purple: #c9a7ef;          /* hobby */
   --hl-grey:   #cfcfcf;          /* admin */
+  --hl-teal:   #7fd8c9;          /* gym */
+  --hl-rose:   #ffc4dd;          /* birthday */
   --mo-rowh:   86px;             /* altezza riga mese: DEVE combaciare con min-height di .mo-cell */
 }
 
@@ -137,6 +139,8 @@ body{
 .tag-health::before, .tag-health::after{ background:var(--hl-green); }
 .tag-admin::before,  .tag-admin::after{  background:var(--hl-grey); }
 .tag-hobby::before,  .tag-hobby::after{  background:var(--hl-purple); }
+.tag-gym::before,      .tag-gym::after{      background:var(--hl-teal); }
+.tag-birthday::before, .tag-birthday::after{ background:var(--hl-rose); }
 .tag-unknown::before,.tag-unknown::after{ background:#e2e2e2; }
 
 .ag-empty{ text-align:center; color:var(--ink-soft); padding:60px 20px; font-size:19px; }
@@ -178,13 +182,18 @@ body{
 }
 
 /* ===================== EDITOR VOCE ===================== */
-.editor{ position:fixed; inset:0; z-index:20; display:flex; align-items:flex-end;
-  background:rgba(20,18,16,.5); animation:riseIn .18s ease; }
+/* Modal FISSO al centro (come .rate): niente inseguimento della tastiera via JS.
+   Su un popup ancorato in basso, ogni apertura/chiusura tastiera o cambio di
+   focus tra i controlli obbligava a ricalcolare/animare la posizione della card,
+   causando gli scatti e i "flash" visibili ad ogni tap. Centrato e fisso, la
+   tastiera si apre sotto senza dover spostare nulla. */
+.editor{ position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+  background:rgba(20,18,16,.5); padding:18px; animation:riseIn .18s ease; }
 .editor-card{
-  width:100%; background:var(--paper); border-radius:20px 20px 0 0; border-top:3px solid var(--ink);
-  padding:24px 22px calc(24px + env(safe-area-inset-bottom)); animation:popIn .26s ease;
+  width:100%; max-width:400px; max-height:88vh; overflow-y:auto; overscroll-behavior:contain;
+  background:var(--paper); border-radius:20px; border:3px solid var(--ink);
+  padding:22px; animation:popIn .22s ease;
   background-image:radial-gradient(var(--dot) 1.0px, transparent 1.3px); background-size:19px 19px;
-  margin-bottom:0;
 }
 .ed-input{
   width:100%; font-family:'Patrick Hand',cursive; font-size:20px; color:var(--ink);
@@ -204,6 +213,8 @@ body{
 .ed-cat.sel.tag-health::before{ background:var(--hl-green); }
 .ed-cat.sel.tag-admin::before{  background:var(--hl-grey); }
 .ed-cat.sel.tag-hobby::before{  background:var(--hl-purple); }
+.ed-cat.sel.tag-gym::before{      background:var(--hl-teal); }
+.ed-cat.sel.tag-birthday::before{ background:var(--hl-rose); }
 .ed-row{ display:flex; gap:12px; }
 .ed-half{ flex:1; min-width:0; }
 .ed-freq-lbl{ font-family:'Patrick Hand',cursive; font-size:18px; color:var(--ink); align-self:center; }
@@ -418,6 +429,8 @@ body{
 .mo-ev.tag-health::before{ background:var(--hl-green); }
 .mo-ev.tag-admin::before{  background:var(--hl-grey); }
 .mo-ev.tag-hobby::before{  background:var(--hl-purple); }
+.mo-ev.tag-gym::before{      background:var(--hl-teal); }
+.mo-ev.tag-birthday::before{ background:var(--hl-rose); }
 .mo-ev.tag-unknown::before{ background:#e2e2e2; }
 .mo-ev span{ position:relative; z-index:1; }
 
