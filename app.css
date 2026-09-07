@@ -113,6 +113,9 @@ body{
 .ag-check.done{
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4,5 C3,11 4,18 5,20 C10,21 17,20 20,19 C21,13 20,7 19,4 C13,3 8,3 4,5 Z' stroke='%231a1a1a' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3Cpath d='M6,12 C8,15 9,17 11,18 C14,12 17,7 20,3' stroke='%23cc2b2b' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
 }
+/* Birthday: icona torta informativa, non un checkbox (niente sfondo SVG/cursore pointer) */
+.ag-check-cake{ background:none; font-size:15px; line-height:1; display:inline-flex;
+  align-items:center; justify-content:center; cursor:default; }
 
 .ag-time{ font-size:16px; color:var(--ink); white-space:nowrap; }
 /* todo del giorno: niente orario, scritta "todo" al posto dell'ora */
@@ -181,6 +184,7 @@ body{
   width:100%; background:var(--paper); border-radius:20px 20px 0 0; border-top:3px solid var(--ink);
   padding:24px 22px calc(24px + env(safe-area-inset-bottom)); animation:popIn .26s ease;
   background-image:radial-gradient(var(--dot) 1.0px, transparent 1.3px); background-size:19px 19px;
+  margin-bottom:0; transition:margin-bottom .12s ease-out;
 }
 .ed-input{
   width:100%; font-family:'Patrick Hand',cursive; font-size:20px; color:var(--ink);
@@ -208,6 +212,19 @@ body{
 .ed-flag input{ width:18px; height:18px; accent-color:var(--ink); }
 /* data bloccata: grigia finché non si attiva "Estendi data" */
 .ed-date-locked{ opacity:.4; pointer-events:none; }
+/* ⏩ sposta ad un altro giorno: sblocca la sola data, senza attivare "Estendi" */
+.ed-move{ font-size:17px; line-height:1; border:2px solid var(--ink); border-radius:8px;
+  background:transparent; padding:5px 9px; cursor:pointer; }
+.ed-move.active{ background:var(--ink); }
+.ed-move:disabled{ opacity:.35; pointer-events:none; }
+.ed-quarter{ flex:0 0 60px; text-align:center; }
+.ed-recurring{ font-size:17px; line-height:1; border:2px solid var(--ink); border-radius:8px;
+  background:transparent; padding:5px 9px; cursor:pointer; margin-right:auto; }
+.ed-recurring:active{ transform:translateY(1px); }
+/* elimina e ricorrente condividono il lato sinistro del footer: elimina prima, ricorrente subito dopo */
+#ed-delete{ margin-right:8px; }
+#ed-delete.hidden + #ed-recurring{ margin-right:auto; }
+.editor.is-recurring #ed-cats{ margin-top:4px; }
 .editor.is-todo #ed-time{ opacity:.35; }
 .editor.is-todo .ed-flag:nth-child(2){ opacity:.4; }   /* Google spento in todo */
 .ed-topostit{ width:100%; font-family:'Patrick Hand',cursive; font-size:15px; cursor:pointer;
@@ -219,6 +236,24 @@ body{
 .ed-actions button:active{ transform:translateY(1px); }
 #ed-delete{ margin-right:auto; border-color:transparent; color:var(--red); }
 #ed-save{ background:var(--ink); color:var(--paper); }
+
+/* ===================== MODAL NOTIFICHE ===================== */
+.rem-modal{ position:fixed; inset:0; z-index:25; display:flex; align-items:center; justify-content:center;
+  background:rgba(20,18,16,.55); padding:18px; animation:riseIn .18s ease; }
+.rem-card{
+  width:100%; max-width:320px; background:var(--paper); border-radius:14px; border:3px solid var(--ink);
+  padding:20px; animation:popIn .26s ease;
+  background-image:radial-gradient(var(--dot) 1.0px, transparent 1.3px); background-size:19px 19px;
+}
+.rem-title{ font-family:'Patrick Hand',cursive; font-size:20px; color:var(--ink); margin-bottom:14px; }
+.rem-opt{ display:flex; gap:10px; align-items:center; font-family:'Patrick Hand',cursive;
+  font-size:17px; color:var(--ink); cursor:pointer; padding:7px 0; }
+.rem-opt input{ width:18px; height:18px; accent-color:var(--ink); }
+.rem-actions{ display:flex; gap:12px; justify-content:flex-end; margin-top:14px; }
+.rem-actions button{ font-family:'Patrick Hand',cursive; font-size:16px; cursor:pointer;
+  padding:8px 18px; border-radius:8px; border:2px solid var(--ink); background:transparent; color:var(--ink); }
+.rem-actions button:last-child{ background:var(--ink); color:var(--paper); }
+.rem-actions button:active{ transform:translateY(1px); }
 
 /* ===================== MODAL POST-IT ===================== */
 .postit-modal{ position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;

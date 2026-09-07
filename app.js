@@ -9,12 +9,24 @@ var CATS = [
   { key:'social', emoji:'❤️', label:'Social' },
   { key:'health', emoji:'⚕️', label:'Health' },
   { key:'admin',  emoji:'📋', label:'Admin' },
-  { key:'hobby',  emoji:'🎯', label:'Hobby' }
+  { key:'hobby',  emoji:'🎯', label:'Hobby' },
+  { key:'gym',    emoji:'🏋️', label:'Gym' }
+];
+// categorie mostrate in modalità ricorrente (editor is-recurring)
+var REC_CATS = [
+  { key:'admin',    emoji:'📋', label:'Admin' },
+  { key:'birthday', emoji:'🎂', label:'Birthday' },
+  { key:'gym',      emoji:'🏋️', label:'Gym' }
 ];
 // mappa vecchie categorie (lavoro/casa/libero/cazzeggio) -> nuove chiavi, a sola VISTA
 var CAT_MIGRATE = { lavoro:'work', casa:'casa', libero:'hobby', cazzeggio:'social' };
 function _catKey(raw){ var k=String(raw||''); return CAT_MIGRATE[k] || k; }
-function _catDef(raw){ var k=_catKey(raw); for(var i=0;i<CATS.length;i++){ if(CATS[i].key===k) return CATS[i]; } return null; }
+function _catDef(raw){
+  var k=_catKey(raw);
+  for(var i=0;i<CATS.length;i++){ if(CATS[i].key===k) return CATS[i]; }
+  for(var j=0;j<REC_CATS.length;j++){ if(REC_CATS[j].key===k) return REC_CATS[j]; }
+  return null;
+}
 // HTML del tag categoria per le viste (emoji + etichetta evidenziata); fallback neutro
 function _catTag(raw){
   var d=_catDef(raw);
@@ -135,8 +147,52 @@ function syncRange(from,to){
       cache.loadedAt = Date.now(); _saveCache();
       // ridisegna SOLO se i dati sono davvero cambiati → niente flicker/refresh inutile
       if(JSON.stringify(cache.entries)!==before) render();
+      _checkSeriesRenewal();
     })
     .catch(function(e){ console.warn('sync fallita (uso cache):', e.message); });
+}
+
+// ====== RINNOVO SERIE RICORRENTI ======
+// tiene traccia (per sessione, non persistito) delle serie già proposte per rinnovo
+// in questo giro di apertura app, per non riproporre lo stesso popup più volte di fila
+// mentre l'utente sta ancora decidendo su un'altra serie.
+var _renewQueue = [];
+var _renewShowing = null;
+
+function _checkSeriesRenewal(){
+  var today=_todayISO();
+  var bySeries={};
+  cache.entries.forEach(function(e){
+    if(!e.seriesId || e._deleted) return;
+    if(!bySeries[e.seriesId] || e.seriesSeq > bySeries[e.seriesId].seriesSeq) bySeries[e.seriesId]=e;
+  });
+  _renewQueue = Object.keys(bySeries).map(function(k){ return bySeries[k]; })
+    .filter(function(last){ return last.seriesRule && last.date <= today; });
+  _showNextRenewPrompt();
+}
+function _showNextRenewPrompt(){
+  if(_renewShowing || !_renewQueue.length) return;
+  _renewShowing = _renewQueue.shift();
+  document.getElementById('renew-title').textContent =
+    'La ricorrenza «'+_renewShowing.title+'» è arrivata alla fine: generare altre occorrenze?';
+  document.getElementById('renew-modal').classList.remove('hidden');
+}
+function renewConfirm(){
+  var last=_renewShowing;
+  document.getElementById('renew-modal').classList.add('hidden'); _renewShowing=null;
+  if(!last) return;
+  var count = last.seriesRule.freq==='year' ? 40 : 12;
+  apiPost({ action:'renewSeries', seriesId:last.seriesId, count:count })
+    .then(function(created){ (created||[]).forEach(function(e){ _upsert(e); }); render(); _showNextRenewPrompt(); })
+    .catch(function(e){ console.warn('renew bg:',e.message); _showNextRenewPrompt(); });
+}
+function renewDecline(){
+  var last=_renewShowing;
+  document.getElementById('renew-modal').classList.add('hidden'); _renewShowing=null;
+  if(!last) return;
+  apiPost({ action:'declineSeries', seriesId:last.seriesId })
+    .then(function(){ last.seriesRule=null; _upsert(last); _showNextRenewPrompt(); })
+    .catch(function(e){ console.warn('decline bg:',e.message); _showNextRenewPrompt(); });
 }
 
 // ====== RANGE / TITOLI ======
@@ -185,8 +241,12 @@ function renderDay(rows){
     var lbl=_dayTimeLabel(e, state.anchor);
     var timeCol = todo ? '<span class="ag-time ag-todo" data-act="edit">todo</span>'
                        : '<span class="ag-time" data-act="edit">'+lbl+'</span>';
+    var isBirthday = _catKey(e.category)==='birthday';
+    var checkSpan = isBirthday
+      ? '<span class="ag-check ag-check-cake">🎂</span>'
+      : '<span class="ag-check'+(e.done?' done':'')+'" data-act="check"></span>';
     return '<div class="ag-line'+(e.done?' done':'')+(todo?' is-todo':'')+'" data-id="'+e.id+'">'
-      +'<span class="ag-check'+(e.done?' done':'')+'" data-act="check"></span>'
+      +checkSpan
       +timeCol
       +'<span class="ag-txt" data-act="edit">'+_esc(e.title)+pin+'</span>'
       +_catTag(e.category)
@@ -339,27 +399,61 @@ function toggleDone(id){
     .catch(function(err){ console.warn('save done bg:', err.message); });   // resta pending → riprovabile, non perso
 }
 
+// tap fuori dalla card (sul backdrop) mentre un campo ha il focus: chiude solo
+// la tastiera, il popup resta aperto finché non premi Annulla/Salva/✕.
+document.getElementById('editor').addEventListener('click', function(ev){
+  if(ev.target.id==='editor' && document.activeElement) document.activeElement.blur();
+});
+
+// Mantiene l'editor ancorato SOPRA la tastiera: su Android/Chrome il layout
+// viewport non si restringe quando appare la tastiera (solo quello "visivo"),
+// quindi un semplice position:fixed la lascia coperta. Si legge l'altezza
+// occupata dalla tastiera da visualViewport e si spinge su la card di quanto.
+(function(){
+  if(!window.visualViewport) return;
+  var card = document.querySelector('#editor .editor-card');
+  function reflow(){
+    var vv = window.visualViewport;
+    var keyboardGap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    card.style.marginBottom = keyboardGap + 'px';
+  }
+  window.visualViewport.addEventListener('resize', reflow);
+  window.visualViewport.addEventListener('scroll', reflow);
+})();
+
 // ====== EDITOR ======
 function _renderCats(){
-  document.getElementById('ed-cats').innerHTML = CATS.map(function(c){
+  var isRec = document.getElementById('editor').classList.contains('is-recurring');
+  var list = isRec ? REC_CATS : CATS;
+  document.getElementById('ed-cats').innerHTML = list.map(function(c){
     return '<button class="ed-cat tag-'+c.key+(c.key===state.selCat?' sel':'')+'" onclick="selCat(\''+c.key+'\')">'
       + '<span>'+c.emoji+' '+c.label+'</span></button>';
   }).join('');
 }
 function selCat(c){ state.selCat=c; _renderCats(); }
 function openEditor(id){
-  state.editing=null; state.selCat='work'; state.fromPostitId=null;
+  state.editing=null; state.selCat='work'; state.fromPostitId=null; state.selReminders=[]; state.moveUnlocked=false;
   document.getElementById('ed-title').value='';
   document.getElementById('ed-time').value='';
   document.getElementById('ed-date').value=state.anchor;   // default: giorno corrente
   document.getElementById('ed-google').checked=false;
   document.getElementById('ed-todo').checked=false;
   document.getElementById('ed-extend').checked=false;
+  document.getElementById('ed-move').classList.remove('active');
   document.getElementById('ed-time-end').value='';
   document.getElementById('ed-date-end').value='';
+  document.getElementById('editor').classList.remove('is-recurring');
+  document.getElementById('ed-row-normal').classList.remove('hidden');
+  document.getElementById('ed-row-recurring').classList.add('hidden');
+  document.getElementById('ed-allday-row').classList.add('hidden');
+  document.getElementById('ed-todo-row').classList.remove('hidden');
+  document.getElementById('ed-extend-row').classList.remove('hidden');
+  document.getElementById('ed-move').classList.remove('hidden');
+  document.getElementById('ed-recurring').classList.remove('hidden');
   if(id){
     var e=cache.entries.find(function(x){ return x.id===id; });
     if(e){ state.editing=e; state.selCat=_catKey(e.category)||'work';
+      state.selReminders=(e.reminders||[]).slice();
       document.getElementById('ed-title').value=e.title;
       document.getElementById('ed-time').value=e.time;
       document.getElementById('ed-date').value=e.date;
@@ -368,7 +462,25 @@ function openEditor(id){
       var hasEnd=!!(e.dateEnd||e.timeEnd);
       document.getElementById('ed-extend').checked=hasEnd;
       document.getElementById('ed-time-end').value=e.timeEnd||'';
-      document.getElementById('ed-date-end').value=e.dateEnd||''; }
+      document.getElementById('ed-date-end').value=e.dateEnd||'';
+      if(e.seriesId){
+        document.getElementById('editor').classList.add('is-recurring');
+        document.getElementById('ed-row-normal').classList.add('hidden');
+        document.getElementById('ed-row-recurring').classList.remove('hidden');
+        document.getElementById('ed-allday-row').classList.remove('hidden');
+        document.getElementById('ed-todo-row').classList.add('hidden');
+        document.getElementById('ed-extend-row').classList.add('hidden');
+        document.getElementById('ed-move').classList.add('hidden');
+        document.getElementById('ed-recurring').classList.add('hidden');
+        document.getElementById('ed-rec-start').value=e.date;
+        document.getElementById('ed-allday').checked=!e.time;
+        document.getElementById('ed-time').disabled=!e.time;
+        if(e.seriesRule){
+          document.getElementById('ed-rec-freq').value=e.seriesRule.freq;
+          document.getElementById('ed-rec-interval').value=e.seriesRule.interval;
+        }
+      }
+    }
   }
   onTodoToggle();   // applica lo stato (abilita/disabilita orario+Google+Estendi)
   onExtendToggle(); // mostra/nasconde i campi fine in base allo stato
@@ -384,30 +496,124 @@ function closeEditor(){ document.getElementById('editor').classList.add('hidden'
 function onTodoToggle(){
   var isTodo=document.getElementById('ed-todo').checked;
   var timeEl=document.getElementById('ed-time'), gEl=document.getElementById('ed-google'), exEl=document.getElementById('ed-extend');
-  if(isTodo){ exEl.checked=false; onExtendToggle(); }   // todo annulla estendi
+  if(isTodo){ exEl.checked=false; document.getElementById('ed-end-row').classList.add('hidden'); }   // todo annulla estendi
   timeEl.disabled=isTodo; if(isTodo) timeEl.value='';
   gEl.disabled=isTodo;    if(isTodo) gEl.checked=false;
   exEl.disabled=isTodo;
+  document.getElementById('ed-move').disabled=isTodo;
+  _refreshDateLock();
   document.getElementById('editor').classList.toggle('is-todo', isTodo);
+}
+// il campo data resta sbloccato se "Estendi data" O "Sposta" (⏩) è attivo
+function _refreshDateLock(){
+  var unlocked = document.getElementById('ed-extend').checked || !!state.moveUnlocked;
+  var dateEl=document.getElementById('ed-date');
+  dateEl.disabled=!unlocked;
+  dateEl.classList.toggle('ed-date-locked', !unlocked);
 }
 function onExtendToggle(){
   var ex=document.getElementById('ed-extend').checked;
   document.getElementById('ed-end-row').classList.toggle('hidden', !ex);
-  // estendere sblocca la data d'inizio (altrimenti resta bloccata sul giorno)
-  var dateEl=document.getElementById('ed-date');
-  dateEl.disabled=!ex;
-  dateEl.classList.toggle('ed-date-locked', !ex);
+  _refreshDateLock();
+}
+// "Sposta" (⏩): sblocca la SOLA data (niente multi-giorno/campi fine), per
+// spostare un impegno singolo ad un altro giorno senza passare da "Estendi".
+function onMoveToggle(){
+  state.moveUnlocked=!state.moveUnlocked;
+  document.getElementById('ed-move').classList.toggle('active', state.moveUnlocked);
+  _refreshDateLock();
+}
+
+// ====== MODALITÀ RICORRENTE (bottone 🔁 nell'editor) ======
+function onRecurringToggle(){
+  var isRec = !document.getElementById('editor').classList.contains('is-recurring');
+  document.getElementById('editor').classList.toggle('is-recurring', isRec);
+  document.getElementById('ed-row-normal').classList.toggle('hidden', isRec);
+  document.getElementById('ed-row-recurring').classList.toggle('hidden', !isRec);
+  document.getElementById('ed-allday-row').classList.toggle('hidden', !isRec);
+  document.getElementById('ed-todo-row').classList.toggle('hidden', isRec);
+  document.getElementById('ed-extend-row').classList.toggle('hidden', isRec);
+  document.getElementById('ed-move').classList.toggle('hidden', isRec);
+  if(isRec){
+    document.getElementById('ed-todo').checked=false;
+    document.getElementById('ed-extend').checked=false;
+    document.getElementById('ed-end-row').classList.add('hidden');
+    document.getElementById('ed-rec-start').value=document.getElementById('ed-date').value || state.anchor;
+  }
+  _renderCats();
+}
+function onAllDayToggle(){
+  var allDay=document.getElementById('ed-allday').checked;
+  document.getElementById('ed-time').disabled=allDay;
+  if(allDay) document.getElementById('ed-time').value='';
+}
+
+// ====== NOTIFICHE (popup alla spunta di "Google Calendar") ======
+function onGoogleToggle(){
+  if(!document.getElementById('ed-google').checked) return;   // spento: niente popup
+  var opts=document.querySelectorAll('#rem-modal .rem-opt input');
+  Array.prototype.forEach.call(opts, function(cb){ cb.checked=(state.selReminders||[]).indexOf(+cb.value)>=0; });
+  document.getElementById('rem-modal').classList.remove('hidden');
+}
+function remCancel(){
+  // annulla il popup senza scegliere = niente notifiche custom (default di Google)
+  state.selReminders=[];
+  document.getElementById('rem-modal').classList.add('hidden');
+}
+function remConfirm(){
+  var opts=document.querySelectorAll('#rem-modal .rem-opt input:checked');
+  state.selReminders=Array.prototype.map.call(opts, function(cb){ return +cb.value; });
+  document.getElementById('rem-modal').classList.add('hidden');
 }
 
 function saveEntry(){
   var title=document.getElementById('ed-title').value.trim();
+  var isRec=document.getElementById('editor').classList.contains('is-recurring');
+  if(!title){ alert('Scrivi cosa'); return; }
+
+  if(isRec){
+    var allDay=document.getElementById('ed-allday').checked;
+    var recTime=allDay ? '' : document.getElementById('ed-time').value;
+    if(!allDay && !/^([01]\d|2[0-3]):[0-5]\d$/.test(recTime)){ alert('Orario obbligatorio (o spunta "Tutto il giorno")'); return; }
+    var recStart=document.getElementById('ed-rec-start').value || state.anchor;
+    var recFreq=document.getElementById('ed-rec-freq').value;
+    var recInterval=Math.max(1, +document.getElementById('ed-rec-interval').value || 1);
+    var onGoogleRec=document.getElementById('ed-google').checked;
+
+    if(state.editing && state.editing.seriesId){
+      // modifica di un'occorrenza esistente: chiede scope, poi propaga
+      var entryMod={ id:state.editing.id, seriesId:state.editing.seriesId, date:recStart, time:recTime,
+        title:title, category:state.selCat, onGoogle:onGoogleRec,
+        reminders:onGoogleRec ? (state.selReminders||[]).slice() : [],
+        eventId:state.editing.eventId, done:state.editing.done||false, dateEnd:'', timeEnd:'' };
+      closeEditor();
+      _askScope('Modifica ricorrenza').then(function(scope){
+        _markPending(entryMod.id);
+        apiPost({ action:'updateEntry', entry:entryMod, scope:scope })
+          .then(function(saved){ _clearPending(entryMod.id); if(saved){ var r=_seriesRangeFrom(recStart); syncRange(r.from, r.to); } })
+          .catch(function(e){ console.warn('upd series bg:',e.message); });
+      });
+      return;
+    }
+
+    // nuova serie
+    var count = recFreq==='year' ? 40 : 12;
+    var newSeries={ date:recStart, time:recTime, title:title, category:state.selCat,
+      onGoogle:onGoogleRec, reminders:onGoogleRec ? (state.selReminders||[]).slice() : [],
+      recurring:{ rule:{freq:recFreq, interval:recInterval}, allDay:allDay, count:count } };
+    closeEditor();
+    apiPost({ action:'addEntry', entry:newSeries })
+      .then(function(saved){ (saved||[]).forEach(function(e){ _upsert(e); }); render(); })
+      .catch(function(e){ console.warn('add series bg:',e.message); });
+    return;
+  }
+
   var isTodo=document.getElementById('ed-todo').checked;
   var isExt=document.getElementById('ed-extend').checked;
   var time=isTodo ? '' : document.getElementById('ed-time').value;
   var date=document.getElementById('ed-date').value || state.anchor;
   var timeEnd=(!isTodo && isExt) ? document.getElementById('ed-time-end').value : '';
   var dateEnd=(!isTodo && isExt) ? document.getElementById('ed-date-end').value : '';
-  if(!title){ alert('Scrivi cosa'); return; }
   var isMulti=!!dateEnd && dateEnd>date;   // multi-giorno: l'ora inizio può mancare (= all-day)
   if(!isTodo && !isMulti && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){ alert('Orario obbligatorio (o spunta "Todo")'); return; }
   if(time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)){ alert('Orario non valido'); return; }
@@ -417,8 +623,9 @@ function saveEntry(){
     var endD=dateEnd||date, endT=timeEnd||time||'00:00';
     if((endD+'T'+endT) < (date+'T'+(time||'00:00'))){ alert('La fine è prima dell\'inizio'); return; }
   }
+  var onGoogle=isTodo ? false : document.getElementById('ed-google').checked;
   var entry={ date:date, time:time, title:title, category:state.selCat,
-    onGoogle:isTodo ? false : document.getElementById('ed-google').checked,
+    onGoogle:onGoogle, reminders:onGoogle ? (state.selReminders||[]).slice() : [],
     done:(state.editing&&state.editing.done)||false,
     dateEnd:dateEnd, timeEnd:timeEnd };
   if(state.editing){
@@ -447,10 +654,43 @@ function saveEntry(){
       .catch(function(e){ console.warn('add bg:',e.message); });              // tmp resta pending → visibile, non perso
   }
 }
+
+// popup "solo questa / questa e le successive": ritorna una Promise<'this'|'following'>
+var _scopeResolveFn=null;
+function _askScope(title){
+  document.getElementById('scope-title').textContent=title;
+  document.getElementById('scope-modal').classList.remove('hidden');
+  return new Promise(function(resolve){ _scopeResolveFn=resolve; });
+}
+function _scopeResolve(scope){
+  document.getElementById('scope-modal').classList.add('hidden');
+  if(_scopeResolveFn){ _scopeResolveFn(scope); _scopeResolveFn=null; }
+}
+// range ampio a partire da una data, per ricaricare la cache dopo una propagazione
+// (non sappiamo quante occorrenze future sono state toccate, quindi risincronizza tutto l'orizzonte serie)
+function _seriesRangeFrom(fromDate){
+  var p=fromDate.split('-'); var to=new Date(+p[0]+50,+p[1]-1,+p[2]);
+  return { from:fromDate, to:_fmt(to) };
+}
+
 function deleteCurrent(){
   if(!state.editing) return;
   if(!confirm('Eliminare?')) return;
   var id=state.editing.id;
+  var seriesId=state.editing.seriesId;
+  if(seriesId){
+    var seriesSeq=state.editing.seriesSeq;
+    closeEditor();
+    _askScope('Elimina ricorrenza').then(function(scope){
+      var e=cache.entries.find(function(x){ return x.id===id; });
+      if(scope==='following'){
+        cache.entries = cache.entries.filter(function(x){ return !(x.seriesId===seriesId && x.seriesSeq>=seriesSeq); });
+      } else if(e){ e._deleted=true; }
+      _saveCache(); render();
+      apiPost({ action:'deleteEntry', id:id, scope:scope }).catch(function(err){ console.warn('del series bg:',err.message); });
+    });
+    return;
+  }
   var e=cache.entries.find(function(x){ return x.id===id; });
   if(e){ e._deleted=true; } _markPending(id); _saveCache(); render(); closeEditor();   // UI subito (nascosta)
   apiPost({ action:'deleteEntry', id:id })

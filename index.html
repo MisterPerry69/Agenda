@@ -48,23 +48,37 @@
   <!-- EDITOR VOCE -->
   <div id="editor" class="editor hidden">
     <div class="editor-card">
-      <input id="ed-title" class="ed-input" placeholder="Cosa?">
+      <input id="ed-title" class="ed-input" placeholder="Cosa?" autocomplete="off" name="ql-title">
 
-      <div class="ed-row">
-        <input id="ed-time" class="ed-input ed-half" type="time">
-        <input id="ed-date" class="ed-input ed-half ed-date-locked" type="date" disabled>
+      <!-- riga NORMALE: orario + data singola -->
+      <div id="ed-row-normal" class="ed-row">
+        <input id="ed-time" class="ed-input ed-half" type="time" autocomplete="off" name="ql-time">
+        <input id="ed-date" class="ed-input ed-half ed-date-locked" type="date" disabled autocomplete="off" name="ql-date">
       </div>
 
-      <!-- campi FINE: compaiono solo con "Estendi data" -->
+      <!-- campi FINE: compaiono solo con "Estendi data" (solo modalità normale) -->
       <div id="ed-end-row" class="ed-row hidden">
-        <input id="ed-time-end" class="ed-input ed-half" type="time">
-        <input id="ed-date-end" class="ed-input ed-half" type="date">
+        <input id="ed-time-end" class="ed-input ed-half" type="time" autocomplete="off" name="ql-time-end">
+        <input id="ed-date-end" class="ed-input ed-half" type="date" autocomplete="off" name="ql-date-end">
       </div>
+
+      <!-- riga RICORRENTE: tipo ripetizione + intervallo + data inizio -->
+      <div id="ed-row-recurring" class="ed-row hidden">
+        <select id="ed-rec-freq" class="ed-input ed-half">
+          <option value="year">Ogni anno</option>
+          <option value="month">Ogni mese</option>
+          <option value="week">Ogni settimana</option>
+        </select>
+        <input id="ed-rec-interval" class="ed-input ed-quarter" type="number" min="1" value="1" title="ogni N">
+        <input id="ed-rec-start" class="ed-input ed-half" type="date" autocomplete="off" name="ql-rec-start">
+      </div>
+      <label id="ed-allday-row" class="ed-flag hidden"><input id="ed-allday" type="checkbox" onchange="onAllDayToggle()"> Tutto il giorno</label>
 
       <div class="ed-flags">
-        <label class="ed-flag"><input id="ed-todo" type="checkbox" onchange="onTodoToggle()"> Todo</label>
-        <label class="ed-flag"><input id="ed-google" type="checkbox"> Google Calendar</label>
-        <label class="ed-flag"><input id="ed-extend" type="checkbox" onchange="onExtendToggle()"> Estendi data</label>
+        <label id="ed-todo-row" class="ed-flag"><input id="ed-todo" type="checkbox" onchange="onTodoToggle()"> Todo</label>
+        <label class="ed-flag"><input id="ed-google" type="checkbox" onchange="onGoogleToggle()"> Google Calendar</label>
+        <label id="ed-extend-row" class="ed-flag"><input id="ed-extend" type="checkbox" onchange="onExtendToggle()"> Estendi data</label>
+        <button id="ed-move" type="button" class="ed-move" onclick="onMoveToggle()" title="Sposta ad un altro giorno">⏩</button>
       </div>
 
       <div id="ed-cats" class="ed-cats"></div>
@@ -72,8 +86,46 @@
       <button id="ed-topostit" class="ed-topostit hidden" onclick="entryToPostit()">↩ Sposta nel post-it</button>
       <div class="ed-actions">
         <button id="ed-delete" class="hidden" onclick="deleteCurrent()">Elimina</button>
+        <button id="ed-recurring" type="button" class="ed-recurring" onclick="onRecurringToggle()" title="Rendi ricorrente">🔁</button>
         <button onclick="closeEditor()">Annulla</button>
         <button id="ed-save" onclick="saveEntry()">Salva</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL SCELTA NOTIFICHE (quando si spunta "Google Calendar") -->
+  <div id="rem-modal" class="rem-modal hidden">
+    <div class="rem-card">
+      <div class="rem-title">Notifiche</div>
+      <label class="rem-opt"><input type="checkbox" value="0"> All'ora esatta</label>
+      <label class="rem-opt"><input type="checkbox" value="10"> 10 minuti prima</label>
+      <label class="rem-opt"><input type="checkbox" value="60"> 1 ora prima</label>
+      <label class="rem-opt"><input type="checkbox" value="1440"> 1 giorno prima</label>
+      <div class="rem-actions">
+        <button onclick="remCancel()">Annulla</button>
+        <button onclick="remConfirm()">Conferma</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL SCELTA SCOPE (modifica/eliminazione di un'occorrenza in serie) -->
+  <div id="scope-modal" class="rem-modal hidden">
+    <div class="rem-card">
+      <div class="rem-title" id="scope-title">Applica a</div>
+      <div class="rem-actions" style="justify-content:center; flex-direction:column; gap:10px;">
+        <button onclick="_scopeResolve('this')">Solo questa occorrenza</button>
+        <button onclick="_scopeResolve('following')">Questa e le successive</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL RINNOVO SERIE (quando l'ultima occorrenza è arrivata) -->
+  <div id="renew-modal" class="rem-modal hidden">
+    <div class="rem-card">
+      <div class="rem-title" id="renew-title">Rinnovare la ricorrenza?</div>
+      <div class="rem-actions">
+        <button onclick="renewDecline()">No</button>
+        <button onclick="renewConfirm()">Sì, genera altre</button>
       </div>
     </div>
   </div>
