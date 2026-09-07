@@ -422,6 +422,13 @@ document.getElementById('editor').addEventListener('click', function(ev){
 })();
 
 // ====== EDITOR ======
+// toggle a bottone-emoji (niente checkbox): stato letto/scritto via classe .active
+function _toggleGet(id){ return document.getElementById(id).classList.contains('active'); }
+function _toggleSet(id, on){ document.getElementById(id).classList.toggle('active', !!on); }
+// dopo un tap su un controllo che non è il campo titolo, ririchiama il focus lì:
+// la tastiera resta sempre a vista finché il popup è aperto (richiesto esplicitamente).
+function _keepKeyboard(){ var t=document.getElementById('ed-title'); if(document.activeElement!==t) t.focus(); }
+
 function _renderCats(){
   var isRec = document.getElementById('editor').classList.contains('is-recurring');
   var list = isRec ? REC_CATS : CATS;
@@ -430,25 +437,33 @@ function _renderCats(){
       + '<span>'+c.emoji+' '+c.label+'</span></button>';
   }).join('');
 }
-function selCat(c){ state.selCat=c; _renderCats(); }
+function selCat(c){ state.selCat=c; _renderCats(); _keepKeyboard(); }
 function openEditor(id){
   state.editing=null; state.selCat='work'; state.fromPostitId=null; state.selReminders=[]; state.moveUnlocked=false;
   document.getElementById('ed-title').value='';
   document.getElementById('ed-time').value='';
   document.getElementById('ed-date').value=state.anchor;   // default: giorno corrente
-  document.getElementById('ed-google').checked=false;
-  document.getElementById('ed-todo').checked=false;
-  document.getElementById('ed-extend').checked=false;
+  _toggleSet('ed-google', false);
+  _toggleSet('ed-todo', false);
+  _toggleSet('ed-extend', false);
   document.getElementById('ed-move').classList.remove('active');
   document.getElementById('ed-time-end').value='';
   document.getElementById('ed-date-end').value='';
+  document.getElementById('ed-rec-time').value='';
+  document.getElementById('ed-rec-time').disabled=false;
+  document.getElementById('ed-rec-start').value=state.anchor;
+  document.getElementById('ed-allday').checked=false;
+  document.getElementById('ed-rec-freq').value='year';
+  document.getElementById('ed-rec-interval').value=1;
   document.getElementById('editor').classList.remove('is-recurring');
   document.getElementById('ed-row-normal').classList.remove('hidden');
   document.getElementById('ed-row-recurring').classList.add('hidden');
+  document.getElementById('ed-row-freq').classList.add('hidden');
   document.getElementById('ed-allday-row').classList.add('hidden');
-  document.getElementById('ed-todo-row').classList.remove('hidden');
-  document.getElementById('ed-extend-row').classList.remove('hidden');
+  document.getElementById('ed-todo').classList.remove('hidden');
+  document.getElementById('ed-extend').classList.remove('hidden');
   document.getElementById('ed-move').classList.remove('hidden');
+  document.getElementById('ed-google').classList.remove('hidden');
   document.getElementById('ed-recurring').classList.remove('hidden');
   if(id){
     var e=cache.entries.find(function(x){ return x.id===id; });
@@ -457,24 +472,27 @@ function openEditor(id){
       document.getElementById('ed-title').value=e.title;
       document.getElementById('ed-time').value=e.time;
       document.getElementById('ed-date').value=e.date;
-      document.getElementById('ed-google').checked=!!e.onGoogle;
-      document.getElementById('ed-todo').checked=(!e.time && !(e.dateEnd&&e.dateEnd>e.date));   // todo = senza orario e non multi-giorno
+      _toggleSet('ed-google', e.onGoogle);
+      _toggleSet('ed-todo', (!e.time && !(e.dateEnd&&e.dateEnd>e.date)));   // todo = senza orario e non multi-giorno
       var hasEnd=!!(e.dateEnd||e.timeEnd);
-      document.getElementById('ed-extend').checked=hasEnd;
+      _toggleSet('ed-extend', hasEnd);
       document.getElementById('ed-time-end').value=e.timeEnd||'';
       document.getElementById('ed-date-end').value=e.dateEnd||'';
       if(e.seriesId){
         document.getElementById('editor').classList.add('is-recurring');
         document.getElementById('ed-row-normal').classList.add('hidden');
         document.getElementById('ed-row-recurring').classList.remove('hidden');
+        document.getElementById('ed-row-freq').classList.remove('hidden');
         document.getElementById('ed-allday-row').classList.remove('hidden');
-        document.getElementById('ed-todo-row').classList.add('hidden');
-        document.getElementById('ed-extend-row').classList.add('hidden');
+        document.getElementById('ed-todo').classList.add('hidden');
+        document.getElementById('ed-extend').classList.add('hidden');
         document.getElementById('ed-move').classList.add('hidden');
+        document.getElementById('ed-google').classList.add('hidden');
         document.getElementById('ed-recurring').classList.add('hidden');
         document.getElementById('ed-rec-start').value=e.date;
+        document.getElementById('ed-rec-time').value=e.time||'';
         document.getElementById('ed-allday').checked=!e.time;
-        document.getElementById('ed-time').disabled=!e.time;
+        document.getElementById('ed-rec-time').disabled=!e.time;
         if(e.seriesRule){
           document.getElementById('ed-rec-freq').value=e.seriesRule.freq;
           document.getElementById('ed-rec-interval').value=e.seriesRule.interval;
@@ -482,8 +500,8 @@ function openEditor(id){
       }
     }
   }
-  onTodoToggle();   // applica lo stato (abilita/disabilita orario+Google+Estendi)
-  onExtendToggle(); // mostra/nasconde i campi fine in base allo stato
+  _applyTodoState();   // applica lo stato (abilita/disabilita orario+Google+Estendi)
+  _applyExtendState(); // mostra/nasconde i campi fine in base allo stato
   _renderCats();
   document.getElementById('ed-delete').classList.toggle('hidden', !id);
   document.getElementById('ed-topostit').classList.toggle('hidden', !id);  // "Al post-it" solo in modifica
@@ -492,29 +510,42 @@ function openEditor(id){
 }
 function closeEditor(){ document.getElementById('editor').classList.add('hidden'); }
 
-// "Todo": niente orario/Google/Estendi. "Estendi": sblocca data inizio + mostra fine.
-function onTodoToggle(){
-  var isTodo=document.getElementById('ed-todo').checked;
+// applica lo stato ATTUALE di "Todo" ai campi correlati, senza invertirlo
+// (usata sia dal click che da openEditor dopo aver precompilato lo stato).
+function _applyTodoState(){
+  var isTodo=_toggleGet('ed-todo');
   var timeEl=document.getElementById('ed-time'), gEl=document.getElementById('ed-google'), exEl=document.getElementById('ed-extend');
-  if(isTodo){ exEl.checked=false; document.getElementById('ed-end-row').classList.add('hidden'); }   // todo annulla estendi
+  if(isTodo){ _toggleSet('ed-extend', false); document.getElementById('ed-end-row').classList.add('hidden'); }   // todo annulla estendi
   timeEl.disabled=isTodo; if(isTodo) timeEl.value='';
-  gEl.disabled=isTodo;    if(isTodo) gEl.checked=false;
+  gEl.disabled=isTodo;    if(isTodo) _toggleSet('ed-google', false);
   exEl.disabled=isTodo;
   document.getElementById('ed-move').disabled=isTodo;
   _refreshDateLock();
   document.getElementById('editor').classList.toggle('is-todo', isTodo);
 }
+// "Todo": niente orario/Google/Estendi. click = inverte poi applica.
+function onTodoToggle(){
+  _toggleSet('ed-todo', !_toggleGet('ed-todo'));
+  _applyTodoState();
+  _keepKeyboard();
+}
 // il campo data resta sbloccato se "Estendi data" O "Sposta" (⏩) è attivo
 function _refreshDateLock(){
-  var unlocked = document.getElementById('ed-extend').checked || !!state.moveUnlocked;
+  var unlocked = _toggleGet('ed-extend') || !!state.moveUnlocked;
   var dateEl=document.getElementById('ed-date');
   dateEl.disabled=!unlocked;
   dateEl.classList.toggle('ed-date-locked', !unlocked);
 }
-function onExtendToggle(){
-  var ex=document.getElementById('ed-extend').checked;
+// applica lo stato ATTUALE di "Estendi" senza invertirlo (stesso motivo di _applyTodoState).
+function _applyExtendState(){
+  var ex=_toggleGet('ed-extend');
   document.getElementById('ed-end-row').classList.toggle('hidden', !ex);
   _refreshDateLock();
+}
+function onExtendToggle(){
+  _toggleSet('ed-extend', !_toggleGet('ed-extend'));
+  _applyExtendState();
+  _keepKeyboard();
 }
 // "Sposta" (⏩): sblocca la SOLA data (niente multi-giorno/campi fine), per
 // spostare un impegno singolo ad un altro giorno senza passare da "Estendi".
@@ -522,35 +553,45 @@ function onMoveToggle(){
   state.moveUnlocked=!state.moveUnlocked;
   document.getElementById('ed-move').classList.toggle('active', state.moveUnlocked);
   _refreshDateLock();
+  _keepKeyboard();
 }
 
 // ====== MODALITÀ RICORRENTE (bottone 🔁 nell'editor) ======
+// notifiche di default per gli impegni ricorrenti: sempre su Google Calendar,
+// 1 giorno prima (1440min) + il giorno stesso (0min) — nessuna scelta manuale.
+var REC_DEFAULT_REMINDERS = [0, 1440];
 function onRecurringToggle(){
   var isRec = !document.getElementById('editor').classList.contains('is-recurring');
   document.getElementById('editor').classList.toggle('is-recurring', isRec);
   document.getElementById('ed-row-normal').classList.toggle('hidden', isRec);
   document.getElementById('ed-row-recurring').classList.toggle('hidden', !isRec);
+  document.getElementById('ed-row-freq').classList.toggle('hidden', !isRec);
   document.getElementById('ed-allday-row').classList.toggle('hidden', !isRec);
-  document.getElementById('ed-todo-row').classList.toggle('hidden', isRec);
-  document.getElementById('ed-extend-row').classList.toggle('hidden', isRec);
+  document.getElementById('ed-todo').classList.toggle('hidden', isRec);
+  document.getElementById('ed-extend').classList.toggle('hidden', isRec);
   document.getElementById('ed-move').classList.toggle('hidden', isRec);
+  document.getElementById('ed-google').classList.toggle('hidden', isRec);
   if(isRec){
-    document.getElementById('ed-todo').checked=false;
-    document.getElementById('ed-extend').checked=false;
+    _toggleSet('ed-todo', false);
+    _toggleSet('ed-extend', false);
     document.getElementById('ed-end-row').classList.add('hidden');
     document.getElementById('ed-rec-start').value=document.getElementById('ed-date').value || state.anchor;
+    document.getElementById('ed-rec-time').value=document.getElementById('ed-time').value || '';
   }
   _renderCats();
+  _keepKeyboard();
 }
 function onAllDayToggle(){
   var allDay=document.getElementById('ed-allday').checked;
-  document.getElementById('ed-time').disabled=allDay;
-  if(allDay) document.getElementById('ed-time').value='';
+  document.getElementById('ed-rec-time').disabled=allDay;
+  if(allDay) document.getElementById('ed-rec-time').value='';
+  _keepKeyboard();
 }
 
 // ====== NOTIFICHE (popup alla spunta di "Google Calendar") ======
 function onGoogleToggle(){
-  if(!document.getElementById('ed-google').checked) return;   // spento: niente popup
+  _toggleSet('ed-google', !_toggleGet('ed-google'));
+  if(!_toggleGet('ed-google')){ _keepKeyboard(); return; }   // spento: niente popup
   var opts=document.querySelectorAll('#rem-modal .rem-opt input');
   Array.prototype.forEach.call(opts, function(cb){ cb.checked=(state.selReminders||[]).indexOf(+cb.value)>=0; });
   document.getElementById('rem-modal').classList.remove('hidden');
@@ -559,11 +600,13 @@ function remCancel(){
   // annulla il popup senza scegliere = niente notifiche custom (default di Google)
   state.selReminders=[];
   document.getElementById('rem-modal').classList.add('hidden');
+  _keepKeyboard();
 }
 function remConfirm(){
   var opts=document.querySelectorAll('#rem-modal .rem-opt input:checked');
   state.selReminders=Array.prototype.map.call(opts, function(cb){ return +cb.value; });
   document.getElementById('rem-modal').classList.add('hidden');
+  _keepKeyboard();
 }
 
 function saveEntry(){
@@ -573,18 +616,19 @@ function saveEntry(){
 
   if(isRec){
     var allDay=document.getElementById('ed-allday').checked;
-    var recTime=allDay ? '' : document.getElementById('ed-time').value;
+    var recTime=allDay ? '' : document.getElementById('ed-rec-time').value;
     if(!allDay && !/^([01]\d|2[0-3]):[0-5]\d$/.test(recTime)){ alert('Orario obbligatorio (o spunta "Tutto il giorno")'); return; }
     var recStart=document.getElementById('ed-rec-start').value || state.anchor;
     var recFreq=document.getElementById('ed-rec-freq').value;
     var recInterval=Math.max(1, +document.getElementById('ed-rec-interval').value || 1);
-    var onGoogleRec=document.getElementById('ed-google').checked;
+    // Google Calendar è sempre attivo per i ricorrenti, con notifiche fisse di default
+    var onGoogleRec=true;
 
     if(state.editing && state.editing.seriesId){
       // modifica di un'occorrenza esistente: chiede scope, poi propaga
       var entryMod={ id:state.editing.id, seriesId:state.editing.seriesId, date:recStart, time:recTime,
         title:title, category:state.selCat, onGoogle:onGoogleRec,
-        reminders:onGoogleRec ? (state.selReminders||[]).slice() : [],
+        reminders:REC_DEFAULT_REMINDERS.slice(),
         eventId:state.editing.eventId, done:state.editing.done||false, dateEnd:'', timeEnd:'' };
       closeEditor();
       _askScope('Modifica ricorrenza').then(function(scope){
@@ -599,7 +643,7 @@ function saveEntry(){
     // nuova serie
     var count = recFreq==='year' ? 40 : 12;
     var newSeries={ date:recStart, time:recTime, title:title, category:state.selCat,
-      onGoogle:onGoogleRec, reminders:onGoogleRec ? (state.selReminders||[]).slice() : [],
+      onGoogle:onGoogleRec, reminders:REC_DEFAULT_REMINDERS.slice(),
       recurring:{ rule:{freq:recFreq, interval:recInterval}, allDay:allDay, count:count } };
     closeEditor();
     apiPost({ action:'addEntry', entry:newSeries })
@@ -608,8 +652,8 @@ function saveEntry(){
     return;
   }
 
-  var isTodo=document.getElementById('ed-todo').checked;
-  var isExt=document.getElementById('ed-extend').checked;
+  var isTodo=_toggleGet('ed-todo');
+  var isExt=_toggleGet('ed-extend');
   var time=isTodo ? '' : document.getElementById('ed-time').value;
   var date=document.getElementById('ed-date').value || state.anchor;
   var timeEnd=(!isTodo && isExt) ? document.getElementById('ed-time-end').value : '';
@@ -623,7 +667,7 @@ function saveEntry(){
     var endD=dateEnd||date, endT=timeEnd||time||'00:00';
     if((endD+'T'+endT) < (date+'T'+(time||'00:00'))){ alert('La fine è prima dell\'inizio'); return; }
   }
-  var onGoogle=isTodo ? false : document.getElementById('ed-google').checked;
+  var onGoogle=isTodo ? false : _toggleGet('ed-google');
   var entry={ date:date, time:time, title:title, category:state.selCat,
     onGoogle:onGoogle, reminders:onGoogle ? (state.selReminders||[]).slice() : [],
     done:(state.editing&&state.editing.done)||false,

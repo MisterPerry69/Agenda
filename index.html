@@ -48,7 +48,7 @@
   <!-- EDITOR VOCE -->
   <div id="editor" class="editor hidden">
     <div class="editor-card">
-      <input id="ed-title" class="ed-input" placeholder="Cosa?" autocomplete="off" name="ql-title">
+      <input id="ed-title" class="ed-input" placeholder="Cosa?" autocomplete="one-time-code" name="ql-title" inputmode="text">
 
       <!-- riga NORMALE: orario + data singola -->
       <div id="ed-row-normal" class="ed-row">
@@ -62,23 +62,27 @@
         <input id="ed-date-end" class="ed-input ed-half" type="date" autocomplete="off" name="ql-date-end">
       </div>
 
-      <!-- riga RICORRENTE: tipo ripetizione + intervallo + data inizio -->
+      <!-- riga RICORRENTE: orario + data inizio (uguale alla normale) + tipo ripetizione -->
       <div id="ed-row-recurring" class="ed-row hidden">
-        <select id="ed-rec-freq" class="ed-input ed-half">
-          <option value="year">Ogni anno</option>
-          <option value="month">Ogni mese</option>
-          <option value="week">Ogni settimana</option>
-        </select>
-        <input id="ed-rec-interval" class="ed-input ed-quarter" type="number" min="1" value="1" title="ogni N">
+        <input id="ed-rec-time" class="ed-input ed-half" type="time" autocomplete="off" name="ql-rec-time">
         <input id="ed-rec-start" class="ed-input ed-half" type="date" autocomplete="off" name="ql-rec-start">
+      </div>
+      <div id="ed-row-freq" class="ed-row hidden">
+        <span class="ed-freq-lbl">Ogni</span>
+        <input id="ed-rec-interval" class="ed-input ed-quarter" type="number" min="1" value="1" title="ogni N">
+        <select id="ed-rec-freq" class="ed-input ed-half">
+          <option value="year">anni</option>
+          <option value="month">mesi</option>
+          <option value="week">settimane</option>
+        </select>
       </div>
       <label id="ed-allday-row" class="ed-flag hidden"><input id="ed-allday" type="checkbox" onchange="onAllDayToggle()"> Tutto il giorno</label>
 
-      <div class="ed-flags">
-        <label id="ed-todo-row" class="ed-flag"><input id="ed-todo" type="checkbox" onchange="onTodoToggle()"> Todo</label>
-        <label class="ed-flag"><input id="ed-google" type="checkbox" onchange="onGoogleToggle()"> Google Calendar</label>
-        <label id="ed-extend-row" class="ed-flag"><input id="ed-extend" type="checkbox" onchange="onExtendToggle()"> Estendi data</label>
-        <button id="ed-move" type="button" class="ed-move" onclick="onMoveToggle()" title="Sposta ad un altro giorno">⏩</button>
+      <div class="ed-flags ed-flags-icons">
+        <button id="ed-todo" type="button" class="ed-icon-btn" onclick="onTodoToggle()" title="Todo">📝</button>
+        <button id="ed-google" type="button" class="ed-icon-btn" onclick="onGoogleToggle()" title="Google Calendar">🗓️</button>
+        <button id="ed-extend" type="button" class="ed-icon-btn" onclick="onExtendToggle()" title="Estendi data">↔️</button>
+        <button id="ed-move" type="button" class="ed-icon-btn" onclick="onMoveToggle()" title="Sposta ad un altro giorno">⏩</button>
       </div>
 
       <div id="ed-cats" class="ed-cats"></div>

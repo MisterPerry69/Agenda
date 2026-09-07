@@ -184,7 +184,7 @@ body{
   width:100%; background:var(--paper); border-radius:20px 20px 0 0; border-top:3px solid var(--ink);
   padding:24px 22px calc(24px + env(safe-area-inset-bottom)); animation:popIn .26s ease;
   background-image:radial-gradient(var(--dot) 1.0px, transparent 1.3px); background-size:19px 19px;
-  margin-bottom:0; transition:margin-bottom .12s ease-out;
+  margin-bottom:0;
 }
 .ed-input{
   width:100%; font-family:'Patrick Hand',cursive; font-size:20px; color:var(--ink);
@@ -192,7 +192,7 @@ body{
 }
 .ed-input:focus{ outline:none; border-bottom-color:var(--ink); }
 #ed-title{ font-family:'Patrick Hand',cursive; font-size:22px; }
-.ed-cats{ display:flex; gap:10px; flex-wrap:wrap; margin:4px 0 18px; }
+.ed-cats{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin:4px 0 18px; }
 .ed-cat{ position:relative; font-family:'Patrick Hand',cursive; font-size:15px; color:var(--ink);
   background:none; border:none; cursor:pointer; padding:3px 8px; }
 .ed-cat span{ position:relative; z-index:1; }
@@ -206,17 +206,20 @@ body{
 .ed-cat.sel.tag-hobby::before{  background:var(--hl-purple); }
 .ed-row{ display:flex; gap:12px; }
 .ed-half{ flex:1; min-width:0; }
-.ed-flags{ display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin:4px 0 16px; }
+.ed-freq-lbl{ font-family:'Patrick Hand',cursive; font-size:18px; color:var(--ink); align-self:center; }
+/* "Tutto il giorno": unico checkbox rimasto in stile label (non è nella riga icone) */
 .ed-flag{ display:flex; gap:7px; align-items:center; font-family:'Patrick Hand',cursive;
-  font-size:16px; color:var(--ink); cursor:pointer; }
+  font-size:16px; color:var(--ink); cursor:pointer; margin:4px 0 16px; }
 .ed-flag input{ width:18px; height:18px; accent-color:var(--ink); }
 /* data bloccata: grigia finché non si attiva "Estendi data" */
 .ed-date-locked{ opacity:.4; pointer-events:none; }
-/* ⏩ sposta ad un altro giorno: sblocca la sola data, senza attivare "Estendi" */
-.ed-move{ font-size:17px; line-height:1; border:2px solid var(--ink); border-radius:8px;
-  background:transparent; padding:5px 9px; cursor:pointer; }
-.ed-move.active{ background:var(--ink); }
-.ed-move:disabled{ opacity:.35; pointer-events:none; }
+/* riga icone: Todo/Google/Estendi/Sposta come bottoni-emoji, tutti sulla stessa riga */
+.ed-flags-icons{ display:flex; gap:10px; flex-wrap:nowrap; justify-content:center; margin:4px 0 16px; }
+.ed-icon-btn, .ed-move{ flex:0 0 auto; font-size:20px; line-height:1; border:2px solid var(--ink); border-radius:8px;
+  background:transparent; padding:7px 12px; cursor:pointer; }
+.ed-icon-btn.active, .ed-move.active{ background:var(--ink); filter:none; }
+.ed-icon-btn:active, .ed-move:active{ transform:translateY(1px); }
+.ed-icon-btn:disabled, .ed-move:disabled{ opacity:.35; pointer-events:none; }
 .ed-quarter{ flex:0 0 60px; text-align:center; }
 .ed-recurring{ font-size:17px; line-height:1; border:2px solid var(--ink); border-radius:8px;
   background:transparent; padding:5px 9px; cursor:pointer; margin-right:auto; }
@@ -226,7 +229,6 @@ body{
 #ed-delete.hidden + #ed-recurring{ margin-right:auto; }
 .editor.is-recurring #ed-cats{ margin-top:4px; }
 .editor.is-todo #ed-time{ opacity:.35; }
-.editor.is-todo .ed-flag:nth-child(2){ opacity:.4; }   /* Google spento in todo */
 .ed-topostit{ width:100%; font-family:'Patrick Hand',cursive; font-size:15px; cursor:pointer;
   padding:9px; margin-bottom:14px; border-radius:8px; border:2px dashed var(--ink-soft);
   background:transparent; color:var(--ink-soft); }
