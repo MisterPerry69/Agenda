@@ -295,8 +295,10 @@ body{
   background:transparent; border:none; border-bottom:2px solid #d8d2c0; padding:4px 2px;
 }
 .plan-title:focus{ outline:none; border-bottom-color:var(--ink); }
+.plan-row-flags{ display:flex; gap:12px; flex:1 1 100%; }
 .plan-todo-flag{ display:flex; gap:5px; align-items:center; font-family:'Patrick Hand',cursive; font-size:14px; color:var(--ink); }
 .plan-time{ font-family:'Patrick Hand',cursive; font-size:15px; color:var(--ink); background:transparent; border:2px solid #d8d2c0; border-radius:6px; padding:3px 6px; }
+.plan-time-sep{ color:var(--ink-soft); }
 .plan-cats{ display:flex; gap:4px; flex-wrap:wrap; }
 .plan-cats .ed-cat{ padding:2px 5px; font-size:13px; }
 .plan-del{ margin-left:auto; background:none; border:none; font-size:18px; cursor:pointer; }

@@ -259,7 +259,10 @@ function generatePlan(){
   apiPost({ action:'planDay', text:text, date:state.anchor, existingEntries:existing })
     .then(function(rows){
       btn.disabled=false; btn.textContent='Genera';
-      planDraft = (rows||[]).map(function(r){ return { title:r.title, time:r.time||'', category:r.category||'admin', isTodo:!!r.isTodo }; });
+      planDraft = (rows||[]).map(function(r){
+        return { title:r.title, time:r.time||'', timeEnd:r.timeEnd||'', category:r.category||'admin',
+          isTodo:!!r.isTodo, onGoogle:!!r.onGoogle, reminders:(r.reminders||[]).slice() };
+      });
       document.getElementById('plan-input-state').classList.add('hidden');
       document.getElementById('plan-draft-state').classList.remove('hidden');
       _renderPlanDraft();
@@ -277,12 +280,17 @@ function _renderPlanDraft(){
     var catBtns = CATS.map(function(c){
       return '<button class="ed-cat tag-'+c.key+(c.key===row.category?' sel':'')+'" onclick="_planSetCat('+idx+',\''+c.key+'\')"><span>'+c.emoji+'</span></button>';
     }).join('');
-    var timeField = row.isTodo ? ''
-      : '<input type="time" class="plan-time" value="'+row.time+'" onchange="_planSetTime('+idx+',this.value)">';
+    var timeFields = row.isTodo ? ''
+      : '<input type="time" class="plan-time" value="'+row.time+'" onchange="_planSetTime('+idx+',this.value)">'
+      + '<span class="plan-time-sep">–</span>'
+      + '<input type="time" class="plan-time" value="'+row.timeEnd+'" onchange="_planSetTimeEnd('+idx+',this.value)">';
     return '<div class="plan-row" data-idx="'+idx+'">'
       + '<input type="text" class="plan-title" value="'+_esc(row.title)+'" onchange="_planSetTitle('+idx+',this.value)">'
+      + '<div class="plan-row-flags">'
       + '<label class="plan-todo-flag"><input type="checkbox" '+(row.isTodo?'checked':'')+' onchange="_planSetTodo('+idx+',this.checked)"> todo</label>'
-      + timeField
+      + '<label class="plan-todo-flag"><input type="checkbox" '+(row.onGoogle?'checked':'')+' onchange="_planSetGoogle('+idx+',this.checked)"> 🗓️</label>'
+      + '</div>'
+      + timeFields
       + '<div class="plan-cats">'+catBtns+'</div>'
       + '<button class="plan-del" onclick="_planRemoveRow('+idx+')">🗑</button>'
       + '</div>';
@@ -290,8 +298,16 @@ function _renderPlanDraft(){
 }
 function _planSetTitle(idx, v){ planDraft[idx].title=v; }
 function _planSetTime(idx, v){ planDraft[idx].time=v; }
+function _planSetTimeEnd(idx, v){ planDraft[idx].timeEnd=v; }
 function _planSetCat(idx, cat){ planDraft[idx].category=cat; _renderPlanDraft(); }
-function _planSetTodo(idx, isTodo){ planDraft[idx].isTodo=isTodo; if(isTodo) planDraft[idx].time=''; _renderPlanDraft(); }
+function _planSetTodo(idx, isTodo){ planDraft[idx].isTodo=isTodo; if(isTodo){ planDraft[idx].time=''; planDraft[idx].timeEnd=''; } _renderPlanDraft(); }
+// checkbox 🗓️ nella bozza: attiva/disattiva Google Calendar per quella voce.
+// Reminder di default se attivato a mano qui (l'AI non ne ha proposti): 10 minuti prima.
+function _planSetGoogle(idx, on){
+  planDraft[idx].onGoogle=on;
+  if(on && !planDraft[idx].reminders.length) planDraft[idx].reminders=[10];
+  if(!on) planDraft[idx].reminders=[];
+}
 function _planRemoveRow(idx){ planDraft.splice(idx,1); _renderPlanDraft(); }
 
 function confirmPlan(){
@@ -301,7 +317,8 @@ function confirmPlan(){
   toCreate.forEach(function(row){
     if(!row.title.trim()) return;   // riga svuotata dall'utente: salta, non creare un impegno senza titolo
     var entry = { date: state.anchor, time: row.isTodo ? '' : row.time, title: row.title.trim(),
-      category: row.category, onGoogle: false, reminders: [], done: false, dateEnd: '', timeEnd: '' };
+      category: row.category, onGoogle: row.onGoogle, reminders: row.onGoogle ? row.reminders.slice() : [],
+      done: false, dateEnd: '', timeEnd: row.isTodo ? '' : row.timeEnd };
     var tmpId = 'tmp_'+Date.now()+Math.random().toString(36).slice(2,6);
     var localEntry = Object.assign({id:tmpId}, entry);
     _markPending(tmpId); _upsert(localEntry); render();
