@@ -36,6 +36,8 @@
 
       <main id="ag-body" class="ag-body"></main>
 
+      <button id="plan-btn" class="plan-btn" onclick="openPlanModal()">Organizza la giornata</button>
+
       <!-- barra viste in basso -->
       <nav class="view-switch">
         <button data-view="day"   class="vbtn active">Giorno</button>
@@ -130,6 +132,29 @@
       <div class="rem-actions">
         <button onclick="renewDecline()">No</button>
         <button onclick="renewConfirm()">Sì, genera altre</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL PLAN MAKER ("Organizza la giornata") -->
+  <div id="plan-modal" class="rem-modal hidden">
+    <div class="rem-card plan-card">
+      <div class="rem-title">Organizza la giornata</div>
+
+      <div id="plan-input-state">
+        <textarea id="plan-text" class="plan-textarea" placeholder="Scrivi cosa devi fare oggi…"></textarea>
+        <div class="rem-actions">
+          <button onclick="closePlanModal()">Annulla</button>
+          <button id="plan-generate-btn" onclick="generatePlan()">Genera</button>
+        </div>
+      </div>
+
+      <div id="plan-draft-state" class="hidden">
+        <div id="plan-draft-list" class="plan-draft-list"></div>
+        <div class="rem-actions">
+          <button onclick="_planBackToInput()">Annulla</button>
+          <button onclick="confirmPlan()">Conferma</button>
+        </div>
       </div>
     </div>
   </div>

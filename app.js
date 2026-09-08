@@ -226,6 +226,91 @@ function renewDecline(){
     .catch(function(e){ console.warn('decline bg:',e.message); _showNextRenewPrompt(); });
 }
 
+// ====== PLAN MAKER ("Organizza la giornata") ======
+// stato locale della bozza corrente (array di {title,time,category,isTodo}); null finché non generata.
+var planDraft = null;
+
+function openPlanModal(){
+  document.getElementById('plan-text').value='';
+  planDraft = null;
+  document.getElementById('plan-input-state').classList.remove('hidden');
+  document.getElementById('plan-draft-state').classList.add('hidden');
+  document.getElementById('plan-generate-btn').disabled=false;
+  document.getElementById('plan-generate-btn').textContent='Genera';
+  document.getElementById('plan-modal').classList.remove('hidden');
+}
+function closePlanModal(){
+  document.getElementById('plan-modal').classList.add('hidden');
+  planDraft = null;
+}
+function _planBackToInput(){
+  planDraft = null;
+  document.getElementById('plan-input-state').classList.remove('hidden');
+  document.getElementById('plan-draft-state').classList.add('hidden');
+}
+
+function generatePlan(){
+  var text = document.getElementById('plan-text').value.trim();
+  if(!text){ alert('Scrivi qualcosa'); return; }
+  var btn = document.getElementById('plan-generate-btn');
+  btn.disabled=true; btn.textContent='Sto organizzando…';
+  var r = _rangeFor('day', state.anchor);
+  var existing = _entriesIn(r.from, r.to).map(function(e){ return { title:e.title, time:e.time }; });
+  apiPost({ action:'planDay', text:text, date:state.anchor, existingEntries:existing })
+    .then(function(rows){
+      btn.disabled=false; btn.textContent='Genera';
+      planDraft = (rows||[]).map(function(r){ return { title:r.title, time:r.time||'', category:r.category||'admin', isTodo:!!r.isTodo }; });
+      document.getElementById('plan-input-state').classList.add('hidden');
+      document.getElementById('plan-draft-state').classList.remove('hidden');
+      _renderPlanDraft();
+    })
+    .catch(function(e){
+      btn.disabled=false; btn.textContent='Genera';
+      alert('Non sono riuscito a interpretare la richiesta: '+e.message+'\nRiprova.');
+    });
+}
+
+function _renderPlanDraft(){
+  var list=document.getElementById('plan-draft-list');
+  if(!planDraft.length){ list.innerHTML='<div class="plan-empty">Nessuna voce proposta.</div>'; return; }
+  list.innerHTML = planDraft.map(function(row, idx){
+    var catBtns = CATS.map(function(c){
+      return '<button class="ed-cat tag-'+c.key+(c.key===row.category?' sel':'')+'" onclick="_planSetCat('+idx+',\''+c.key+'\')"><span>'+c.emoji+'</span></button>';
+    }).join('');
+    var timeField = row.isTodo ? ''
+      : '<input type="time" class="plan-time" value="'+row.time+'" onchange="_planSetTime('+idx+',this.value)">';
+    return '<div class="plan-row" data-idx="'+idx+'">'
+      + '<input type="text" class="plan-title" value="'+_esc(row.title)+'" onchange="_planSetTitle('+idx+',this.value)">'
+      + '<label class="plan-todo-flag"><input type="checkbox" '+(row.isTodo?'checked':'')+' onchange="_planSetTodo('+idx+',this.checked)"> todo</label>'
+      + timeField
+      + '<div class="plan-cats">'+catBtns+'</div>'
+      + '<button class="plan-del" onclick="_planRemoveRow('+idx+')">🗑</button>'
+      + '</div>';
+  }).join('');
+}
+function _planSetTitle(idx, v){ planDraft[idx].title=v; }
+function _planSetTime(idx, v){ planDraft[idx].time=v; }
+function _planSetCat(idx, cat){ planDraft[idx].category=cat; _renderPlanDraft(); }
+function _planSetTodo(idx, isTodo){ planDraft[idx].isTodo=isTodo; if(isTodo) planDraft[idx].time=''; _renderPlanDraft(); }
+function _planRemoveRow(idx){ planDraft.splice(idx,1); _renderPlanDraft(); }
+
+function confirmPlan(){
+  if(!planDraft || !planDraft.length){ closePlanModal(); return; }
+  var toCreate = planDraft.slice();
+  closePlanModal();
+  toCreate.forEach(function(row){
+    if(!row.title.trim()) return;   // riga svuotata dall'utente: salta, non creare un impegno senza titolo
+    var entry = { date: state.anchor, time: row.isTodo ? '' : row.time, title: row.title.trim(),
+      category: row.category, onGoogle: false, reminders: [], done: false, dateEnd: '', timeEnd: '' };
+    var tmpId = 'tmp_'+Date.now()+Math.random().toString(36).slice(2,6);
+    var localEntry = Object.assign({id:tmpId}, entry);
+    _markPending(tmpId); _upsert(localEntry); render();
+    apiPost({ action:'addEntry', entry: entry })
+      .then(function(saved){ _removeLocal(tmpId); if(saved){ _upsert(saved); } render(); })
+      .catch(function(e){ console.warn('plan addEntry bg:',e.message); });
+  });
+}
+
 // ====== RANGE / TITOLI ======
 function _rangeFor(view, anchor){
   var p=anchor.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
@@ -441,9 +526,10 @@ document.getElementById('editor').addEventListener('click', function(ev){
 // toggle a bottone-emoji (niente checkbox): stato letto/scritto via classe .active
 function _toggleGet(id){ return document.getElementById(id).classList.contains('active'); }
 function _toggleSet(id, on){ document.getElementById(id).classList.toggle('active', !!on); }
-// dopo un tap su un controllo che non è il campo titolo, ririchiama il focus lì:
-// la tastiera resta sempre a vista finché il popup è aperto (richiesto esplicitamente).
-function _keepKeyboard(){ var t=document.getElementById('ed-title'); if(document.activeElement!==t) t.focus(); }
+// L'editor è ora un modal centrato fisso: non serve più forzare il focus sul
+// titolo dopo ogni tap sui bottoni icona (anzi, era quello a far ricomparire la
+// tastiera in continuazione). No-op mantenuto per non toccare ogni chiamata.
+function _keepKeyboard(){}
 
 function _renderCats(){
   var isRec = document.getElementById('editor').classList.contains('is-recurring');
@@ -522,7 +608,8 @@ function openEditor(id){
   document.getElementById('ed-delete').classList.toggle('hidden', !id);
   document.getElementById('ed-topostit').classList.toggle('hidden', !id);  // "Al post-it" solo in modifica
   document.getElementById('editor').classList.remove('hidden');
-  setTimeout(function(){ document.getElementById('ed-title').focus(); },80);
+  // niente auto-focus sul titolo: in un modal centrato apre subito la tastiera
+  // e la fa continuare a saltare fuori ad ogni interazione con gli altri campi.
 }
 function closeEditor(){ document.getElementById('editor').classList.add('hidden'); }
 
