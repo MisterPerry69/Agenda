@@ -261,7 +261,7 @@ function generatePlan(){
       btn.disabled=false; btn.textContent='Genera';
       planDraft = (rows||[]).map(function(r){
         return { title:r.title, time:r.time||'', timeEnd:r.timeEnd||'', category:r.category||'admin',
-          isTodo:!!r.isTodo, onGoogle:!!r.onGoogle, reminders:(r.reminders||[]).slice() };
+          isTodo:!!r.isTodo, kind:r.kind||'todo', onGoogle:!!r.onGoogle, reminders:(r.reminders||[]).slice() };
       });
       document.getElementById('plan-input-state').classList.add('hidden');
       document.getElementById('plan-draft-state').classList.remove('hidden');
@@ -280,10 +280,11 @@ function _renderPlanDraft(){
     var catBtns = CATS.map(function(c){
       return '<button class="ed-cat tag-'+c.key+(c.key===row.category?' sel':'')+'" onclick="_planSetCat('+idx+',\''+c.key+'\')"><span>'+c.emoji+'</span></button>';
     }).join('');
+    // solo l'orario di INIZIO è modificabile a mano: timeEnd resta nello stato
+    // (serve per la durata dell'evento Calendar/reminder) ma non si mostra —
+    // l'utente ragiona per "quando inizia", non per il blocco di tempo esatto.
     var timeFields = row.isTodo ? ''
-      : '<input type="time" class="plan-time" value="'+row.time+'" onchange="_planSetTime('+idx+',this.value)">'
-      + '<span class="plan-time-sep">–</span>'
-      + '<input type="time" class="plan-time" value="'+row.timeEnd+'" onchange="_planSetTimeEnd('+idx+',this.value)">';
+      : '<input type="time" class="plan-time" value="'+row.time+'" onchange="_planSetTime('+idx+',this.value)">';
     return '<div class="plan-row" data-idx="'+idx+'">'
       + '<input type="text" class="plan-title" value="'+_esc(row.title)+'" onchange="_planSetTitle('+idx+',this.value)">'
       + '<div class="plan-row-flags">'
@@ -297,7 +298,20 @@ function _renderPlanDraft(){
   }).join('');
 }
 function _planSetTitle(idx, v){ planDraft[idx].title=v; }
-function _planSetTime(idx, v){ planDraft[idx].time=v; }
+// sposta l'orario di inizio mantenendo la durata originale (timeEnd non è
+// mostrato in UI, ma va tenuto coerente: altrimenti spostare l'inizio a mano
+// lascerebbe la fine ferma, con durate assurde o negative).
+function _planSetTime(idx, v){
+  var row=planDraft[idx];
+  var oldStart=_hmToMin(row.time), oldEnd=_hmToMin(row.timeEnd);
+  var newStart=_hmToMin(v);
+  if(oldStart!=null && oldEnd!=null && newStart!=null){
+    row.timeEnd=_minToHm(newStart + (oldEnd-oldStart));
+  }
+  row.time=v;
+}
+function _hmToMin(hm){ if(!hm) return null; var p=hm.split(':'); return (+p[0])*60+(+p[1]); }
+function _minToHm(total){ total=((total%1440)+1440)%1440; var h=Math.floor(total/60), m=total%60; return ('0'+h).slice(-2)+':'+('0'+m).slice(-2); }
 function _planSetTimeEnd(idx, v){ planDraft[idx].timeEnd=v; }
 function _planSetCat(idx, cat){ planDraft[idx].category=cat; _renderPlanDraft(); }
 function _planSetTodo(idx, isTodo){ planDraft[idx].isTodo=isTodo; if(isTodo){ planDraft[idx].time=''; planDraft[idx].timeEnd=''; } _renderPlanDraft(); }

@@ -277,6 +277,10 @@ body{
 .rem-actions button:active{ transform:translateY(1px); }
 
 /* ===================== MODAL PLAN MAKER ===================== */
+/* alzato rispetto agli altri .rem-modal centrati: con la tastiera aperta sul
+   campo di testo, il bottone "Genera" resta visibile sopra di essa invece di
+   finirci sotto. */
+#plan-modal{ align-items:flex-start; padding-top:6vh; }
 .plan-card{ max-width:420px; max-height:88vh; overflow-y:auto; overscroll-behavior:contain; }
 .plan-textarea{
   width:100%; min-height:120px; font-family:'Patrick Hand',cursive; font-size:18px; color:var(--ink);
@@ -287,8 +291,7 @@ body{
 .plan-draft-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:6px; }
 .plan-row{
   display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px; border-radius:10px;
-  border:2px solid #d8d2c0; background-image:radial-gradient(var(--dot) 1.0px, transparent 1.3px);
-  background-size:19px 19px;
+  border:2px solid #d8d2c0; background:transparent;
 }
 .plan-title{
   flex:1 1 100%; font-family:'Patrick Hand',cursive; font-size:17px; color:var(--ink);
