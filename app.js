@@ -1374,7 +1374,7 @@ var EMOTIONS = [
   { id:'soddisfatto-sex', file:'soddisfatto-sex.png', scaglione:'trasversale' }
 ];
 var SCAGLIONI_ORDER = ['1-2','3-4','5-6','7-8','9-10'];
-var SCAGLIONI_LABEL = { '1-2':'Malissimo', '3-4':'Male', '5-6':'Neutro', '7-8':'Bene', '9-10':'Benissimo' };
+var SCAGLIONI_LABEL = { '1-2':'Giù del tutto', '3-4':'In difficoltà', '5-6':'Così così', '7-8':'Sereno', '9-10':'Al top' };
 function scaglioneOfMood(m){ if(m<=2) return '1-2'; if(m<=4) return '3-4'; if(m<=6) return '5-6'; if(m<=8) return '7-8'; return '9-10'; }
 function _emotionsByScaglione(sc){ return EMOTIONS.filter(function(e){ return e.scaglione===sc; }); }
 
@@ -1428,8 +1428,7 @@ function openRate(){
   rateState.moreOpen = false;
   rateState.extraScaglione = null;
   var p=rateState.date.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
-  var oggi = rateState.date===_todayISO();
-  document.getElementById('rate-slot').textContent = d.getDate()+' '+MESI[d.getMonth()]+(oggi?' (oggi)':'');
+  document.getElementById('rate-slot').textContent = d.getDate()+' '+MESI[d.getMonth()];
   document.getElementById('rate-mood').value = rateState.mood;
   document.getElementById('rate-emo-more').classList.add('hidden');
   document.getElementById('rate-emo-more-btn').textContent = '+ Aggiungi emozione';

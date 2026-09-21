@@ -551,12 +551,17 @@ body{
 /* ===================== MODAL VOTO GIORNALIERO (mood + emozioni) ===================== */
 .rate{ position:fixed; inset:0; z-index:25; display:flex; align-items:center; justify-content:center;
   background:rgba(20,18,16,.55); padding:20px; animation:riseIn .18s ease; }
-.rate-card{ width:100%; max-width:380px; max-height:88vh; overflow-y:auto; overscroll-behavior:contain;
+/* dimensione fissa (non cresce/si rimpicciolisce col contenuto): solo la zona
+   emozioni scrolla al suo interno, slider e azioni restano sempre a vista. */
+.rate-card{ width:100%; max-width:380px; height:min(640px,88vh);
   background:var(--paper); border-radius:20px; padding:26px 24px 20px;
   box-shadow:0 16px 40px rgba(0,0,0,.4); text-align:center; font-family:'Patrick Hand',cursive; color:var(--ink);
-  animation:popIn .24s ease; position:relative; }
-.rate-slot{ font-weight:700; font-size:15px; color:var(--ink-soft); margin-bottom:6px; }
-.rate-field{ text-align:left; margin:14px 0; }
+  animation:popIn .24s ease; position:relative;
+  display:flex; flex-direction:column; }
+.rate-slot{ flex-shrink:0; font-weight:700; font-size:15px; color:var(--ink-soft); margin-bottom:6px; }
+.rate-field{ flex-shrink:0; text-align:left; margin:14px 0; }
+.rate-emo-scroll{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.rate-actions{ flex-shrink:0; }
 .rate-q{ font-size:19px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
 .rate-num{ margin-left:auto; font-weight:700; font-size:22px; color:var(--red); }
 /* nel mood il numero ha già margin-left:auto → la faccina lo segue subito */
@@ -570,20 +575,18 @@ body{
 .rate-slider.mood.m9{ accent-color:#3f9b52; }
 .rate-face.m1{ filter:none; } /* la faccina cambia con moodFace(), il colore lo dà lo slider */
 
-/* griglia emozioni: bottoni quadrati con immagine + nome, selezione evidenziata */
-.rate-emo-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(70px,1fr)); gap:8px; margin:14px 0; }
-.rate-emo-item{ display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 2px;
+/* griglia emozioni: SEMPRE 3 colonne fisse (più spazio, icone più grandi) */
+.rate-emo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0; }
+.rate-emo-item{ display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 2px;
   border:2px solid transparent; border-radius:10px; background:transparent; cursor:pointer; }
-.rate-emo-item img{ width:44px; height:44px; object-fit:contain; }
-.rate-emo-item span{ font-family:'Patrick Hand',cursive; font-size:11px; color:var(--ink-soft); text-transform:capitalize; }
+.rate-emo-item img{ width:60px; height:60px; object-fit:contain; }
+.rate-emo-item span{ font-family:'Patrick Hand',cursive; font-size:12px; color:var(--ink-soft); text-transform:capitalize; }
 .rate-emo-item.sel{ border-color:var(--ink); background:rgba(0,0,0,.06); }
 .rate-emo-item.sel span{ color:var(--ink); font-weight:700; }
 
 .rate-emo-more-btn{ width:100%; font-family:'Patrick Hand',cursive; font-size:15px; cursor:pointer;
   padding:8px; margin:6px 0 4px; border-radius:8px; border:2px dashed var(--ink-soft);
   background:transparent; color:var(--ink-soft); }
-.rate-emo-sub-label{ font-family:'Patrick Hand',cursive; font-size:12px; color:var(--ink-soft);
-  text-transform:uppercase; letter-spacing:.5px; margin:10px 0 4px; text-align:left; }
 .rate-emo-scaglioni-btns{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
 .rate-emo-sc-btn{ font-family:'Patrick Hand',cursive; font-size:13px; cursor:pointer;
   padding:5px 10px; border-radius:8px; border:2px solid var(--ink-soft); background:transparent; color:var(--ink-soft); }
