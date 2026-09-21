@@ -76,6 +76,7 @@
           <option value="year">anni</option>
           <option value="month">mesi</option>
           <option value="week">settimane</option>
+          <option value="day">giorni</option>
         </select>
       </div>
       <label id="ed-allday-row" class="ed-flag hidden"><input id="ed-allday" type="checkbox" onchange="onAllDayToggle()"> Tutto il giorno</label>
@@ -200,45 +201,40 @@
     </div>
   </div>
 
-  <!-- RIEPILOGO MENSILE (grafico 3 linee + medie) — si apre dal bookmark in vista MESE -->
+  <!-- RIEPILOGO MENSILE (grafico mood + media + top emozioni) — si apre dal bookmark in vista MESE -->
   <div id="monthstats" class="tracking hidden">
     <div class="tk-page">
       <header class="tk-head">
         <div id="ms-title" class="tk-title">—</div>
-        <button class="tk-close" onclick="closeMonthStats()">✕</button>
+        <div class="tk-head-actions">
+          <button class="tk-close" id="ms-oldview" onclick="openOldTrackingReadonly()" title="Storico vecchio sistema (sola lettura)">⟲</button>
+          <button class="tk-close" onclick="closeMonthStats()">✕</button>
+        </div>
       </header>
       <div class="tk-rule"></div>
       <div id="ms-body" class="ms-body"></div>
     </div>
   </div>
 
-  <!-- MODAL VOTI (unico, non più a step) -->
+  <!-- MODAL VOTO GIORNALIERO (mood + emozioni) -->
   <div id="rate" class="rate hidden">
     <div class="rate-card">
       <div id="rate-slot" class="rate-slot">—</div>
 
       <div class="rate-field">
-        <div class="rate-q">Cosa hai fatto?</div>
-        <!-- autocomplete: suggerimenti da storico DB + eventi della fascia -->
-        <div class="rate-ac-wrap">
-          <input id="rate-act" class="rate-input" placeholder="scrivi…" autocomplete="off">
-          <div id="rate-ac" class="rate-ac hidden"></div>
-        </div>
-      </div>
-
-      <div class="rate-field">
-        <div class="rate-q">Piacevolezza <span id="rate-pleasure-val" class="rate-num">5</span></div>
-        <input id="rate-pleasure" class="rate-slider" type="range" min="1" max="10" value="5">
-      </div>
-
-      <div class="rate-field">
-        <div class="rate-q">Utilità <span id="rate-utility-val" class="rate-num">5</span></div>
-        <input id="rate-utility" class="rate-slider" type="range" min="1" max="10" value="5">
-      </div>
-
-      <div class="rate-field">
         <div class="rate-q">Mood <span id="rate-mood-val" class="rate-num">5</span><span id="rate-mood-face" class="rate-face">😐</span></div>
         <input id="rate-mood" class="rate-slider mood" type="range" min="1" max="10" value="5">
+      </div>
+
+      <div id="rate-emo-primary" class="rate-emo-grid"></div>
+
+      <button id="rate-emo-more-btn" type="button" class="rate-emo-more-btn" onclick="toggleEmoMore()">+ Aggiungi emozione</button>
+      <div id="rate-emo-more" class="hidden">
+        <div class="rate-emo-sub-label">Trasversali</div>
+        <div id="rate-emo-trasversali" class="rate-emo-grid"></div>
+        <div class="rate-emo-sub-label">Altri scaglioni</div>
+        <div id="rate-emo-scaglioni-btns" class="rate-emo-scaglioni-btns"></div>
+        <div id="rate-emo-scaglione-extra" class="rate-emo-grid"></div>
       </div>
 
       <div class="rate-actions">

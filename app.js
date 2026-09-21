@@ -120,13 +120,12 @@ function boot(){
   // precarica un ampio intervallo (anno corrente ± qualche mese) in background
   var y = new Date().getFullYear();
   syncRange((y-1)+'-12-01', (y+1)+'-01-31');
-  // badge bookmark: subito dalla cache, poi aggiorna col tracking fresco di oggi
+  // badge bookmark: subito dalla cache, poi aggiorna col MoodLog fresco di oggi
   refreshBookmarkBadge();
-  apiGet({ action:'getTracking', date:_todayISO() }).then(function(d){
-    var fresh={}; (d&&d.entries||[]).forEach(function(e){ fresh[e.slot]=e; });
-    _trkCacheSet(_todayISO(), fresh); refreshBookmarkBadge();
+  apiGet({ action:'getMoodLog', date:_todayISO() }).then(function(d){
+    _moodCacheSet(_todayISO(), d);   // d è null se non ancora votato oggi
+    refreshBookmarkBadge();
   }).catch(function(){});
-  loadActivities();   // storico attività per l'autocomplete dei voti
 }
 // chiave di contenuto per riconoscere una pending già confermata sul server
 // (stessa data+ora+titolo) anche se l'id locale (tmp_...) non corrisponde più:
@@ -203,7 +202,7 @@ function renewConfirm(){
   var last=_renewShowing;
   document.getElementById('renew-modal').classList.add('hidden'); _renewShowing=null;
   if(!last) return;
-  var count = last.freq==='year' ? 40 : 12;
+  var count = last.freq==='year' ? 40 : (last.freq==='day' ? 30 : 12);
   apiPost({ action:'renewSeries', seriesId:last.seriesId, count:count })
     .then(function(created){
       // le nuove occorrenze potrebbero cadere fuori dalla finestra già in cache:
@@ -775,7 +774,7 @@ function saveEntry(){
     }
 
     // nuova serie
-    var count = recFreq==='year' ? 40 : 12;
+    var count = recFreq==='year' ? 40 : (recFreq==='day' ? 30 : 12);
     var newSeries={ date:recStart, time:recTime, title:title, category:state.selCat,
       onGoogle:onGoogleRec, reminders:REC_DEFAULT_REMINDERS.slice(),
       recurring:{ rule:{freq:recFreq, interval:recInterval}, allDay:allDay, count:count } };
@@ -1135,42 +1134,48 @@ function _trkCacheGet(date){ try{ return JSON.parse(localStorage.getItem('ql_trk
 function _trkCacheSet(date, bySlot){ try{ localStorage.setItem('ql_trk_'+date, JSON.stringify(bySlot)); }catch(e){} }
 
 // Il bookmark è CONTESTUALE: in vista mese apre il riepilogo mensile,
-// in giorno/settimana apre i voti del giorno.
+// in giorno/settimana apre il voto (mood+emozioni) del giorno.
 function openTracking(){
   if(state.view==='month') return openMonthStats();
-  tkState.date = state.anchor;
-  tkState.slots = _slotsFor(tkState.date);             // fasce del giorno (feriale/weekend)
-  tkState.bySlot = _trkCacheGet(tkState.date) || {};   // subito dalla cache (niente vuoto)
-  document.getElementById('tracking').classList.remove('hidden');
-  renderTracking();
-  apiGet({ action:'getTracking', date:tkState.date }).then(function(d){
-    var fresh={}; (d&&d.entries||[]).forEach(function(e){ fresh[e.slot]=e; });
-    if(d&&d.slots&&d.slots.length) tkState.slots=d.slots;   // fasce autorevoli dal server
-    // ridisegna solo se cambiato (evita il refresh/flicker inutile)
-    if(JSON.stringify(fresh)!==JSON.stringify(tkState.bySlot)){
-      tkState.bySlot=fresh; _trkCacheSet(tkState.date, fresh);
-    }
-    renderTracking();
-  }).catch(function(e){ console.warn('tracking get bg:',e.message); });
+  openRate();
 }
 function closeTracking(){ document.getElementById('tracking').classList.add('hidden'); }
 
-function renderTracking(){
+// Apre la vecchia vista a fasce in SOLA LETTURA (storico pre-cambio), dall'icona
+// ⟲ nel riepilogo mensile. Nessuna scrittura possibile da qui: niente più
+// modal a 3 slider per crearne di nuovi, quindi le righe non aprono openRate.
+function openOldTrackingReadonly(){
+  tkState.date = state.anchor;
+  tkState.slots = _slotsFor(tkState.date);
+  tkState.bySlot = _trkCacheGet(tkState.date) || {};
+  document.getElementById('tracking').classList.remove('hidden');
+  renderTracking(true);
+  apiGet({ action:'getTracking', date:tkState.date }).then(function(d){
+    var fresh={}; (d&&d.entries||[]).forEach(function(e){ fresh[e.slot]=e; });
+    if(d&&d.slots&&d.slots.length) tkState.slots=d.slots;
+    tkState.bySlot=fresh; _trkCacheSet(tkState.date, fresh);
+    renderTracking(true);
+  }).catch(function(e){ console.warn('tracking readonly get bg:',e.message); });
+}
+
+function renderTracking(readonly){
   var p=tkState.date.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
   var oggi = tkState.date===_todayISO();
-  _setHTML(document.getElementById('tk-title'), '<span>'+d.getDate()+' '+MESI[d.getMonth()].toUpperCase()+'</span><span class="sub">'+(oggi?'i voti di oggi':'voti del giorno')+'</span>');
+  var subLabel = readonly ? 'storico (sola lettura)' : (oggi?'i voti di oggi':'voti del giorno');
+  _setHTML(document.getElementById('tk-title'), '<span>'+d.getDate()+' '+MESI[d.getMonth()].toUpperCase()+'</span><span class="sub">'+subLabel+'</span>');
   var html='';
   (tkState.slots&&tkState.slots.length ? tkState.slots : _slotsFor(tkState.date)).forEach(function(slot){
     var rec=tkState.bySlot[slot];
     var past=_isPast(slot, tkState.date);
+    var click = readonly ? '' : ' onclick="openRate(\''+slot+'\')"';
     if(rec && (rec.pleasure!=null || rec.utility!=null || rec.mood!=null || rec.activity)){
       var votes='';
       if(rec.pleasure!=null) votes+='<span class="tk-v p">'+rec.pleasure+'</span>';
       if(rec.utility!=null)  votes+='<span class="tk-v u">'+rec.utility+'</span>';
       if(rec.mood!=null)     votes+='<span class="tk-v m '+moodClass(rec.mood)+'">'+rec.mood+' '+moodFace(rec.mood)+'</span>';
-      html+='<div class="tk-slot" onclick="openRate(\''+slot+'\')"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act">'+_esc(rec.activity||'(senza nota)')+'</div><div class="tk-votes">'+votes+'</div></div>';
-    } else if(past){
-      html+='<div class="tk-slot" onclick="openRate(\''+slot+'\')"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act empty">da votare…</div><div class="tk-votes"><span class="tk-add">+</span></div></div>';
+      html+='<div class="tk-slot"'+click+'><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act">'+_esc(rec.activity||'(senza nota)')+'</div><div class="tk-votes">'+votes+'</div></div>';
+    } else if(past && !readonly){
+      html+='<div class="tk-slot"'+click+'><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act empty">da votare…</div><div class="tk-votes"><span class="tk-add">+</span></div></div>';
     } else {
       html+='<div class="tk-slot future"><div class="tk-time">'+slot.replace('-',' – ')+'</div><div class="tk-act empty">— non ancora</div></div>';
     }
@@ -1198,17 +1203,17 @@ function _recapHTML(){
     + one('piacevolezza', p) + one('utilità', u) + one('mood', m, mFace) + '</div>';
 }
 
-// ---- effetto bookmark: pulsa se OGGI ci sono fasce passate non votate ----
-function _slotVoted(rec){ return rec && (rec.pleasure!=null || rec.utility!=null || rec.mood!=null || rec.activity); }
+// ---- effetto bookmark: pulsa se sono le 22:00+ e oggi non hai ancora votato ----
 function refreshBookmarkBadge(){
   var bm=document.getElementById('bookmark'); if(!bm) return;
-  var bySlot = _trkCacheGet(_todayISO()) || {};
-  var arretrate = _slotsFor(_todayISO()).filter(function(s){ return _isPast(s, _todayISO()) && !_slotVoted(bySlot[s]); }).length;
-  bm.classList.toggle('pending', arretrate>0);
-  bm.setAttribute('data-count', arretrate>0 ? arretrate : '');
+  var rec = _moodCacheGet(_todayISO());
+  var now = new Date();
+  var late = now.getHours() >= 22;
+  var pending = late && !rec;
+  bm.classList.toggle('pending', pending);
 }
 
-// ====== RIEPILOGO MENSILE (grafico 3 linee + medie) ======
+// ====== RIEPILOGO MENSILE (grafico mood + media + top emozioni) ======
 // Si apre dal bookmark quando sei in vista MESE. Sola lettura.
 var msState = { from:null, to:null, data:null };
 
@@ -1220,7 +1225,7 @@ function openMonthStats(){
     '<span>'+MESI[d.getMonth()].toUpperCase()+'</span><span class="sub">'+d.getFullYear()+'</span>');
   document.getElementById('monthstats').classList.remove('hidden');
   _setHTML(document.getElementById('ms-body'), '<div class="ms-loading">carico…</div>');
-  apiGet({ action:'getTrackingRange', from:r.from, to:r.to })
+  apiGet({ action:'getMoodLogRange', from:r.from, to:r.to })
     .then(function(d2){ msState.data=d2; renderMonthStats(); })
     .catch(function(e){
       _setHTML(document.getElementById('ms-body'), '<div class="ms-loading">niente dati (rete?)</div>');
@@ -1228,16 +1233,6 @@ function openMonthStats(){
     });
 }
 function closeMonthStats(){ document.getElementById('monthstats').classList.add('hidden'); }
-
-// Voti storici salvati con la vecchia scala 0-10: uno 0 sfonderebbe il grafico (scala 1-10)
-// finendo sopra le etichette. Lo riportiamo a 1 (entrambi significavano "il minimo").
-function _clamp10(v){ if(v==null) return null; return Math.max(1, Math.min(10, v)); }
-
-var MS_FIELDS = [
-  { k:'pleasure', cls:'p', lab:'piacevolezza' },
-  { k:'utility',  cls:'u', lab:'utilità' },
-  { k:'mood',     cls:'m', lab:'mood' }
-];
 
 function renderMonthStats(){
   var d=msState.data;
@@ -1249,8 +1244,8 @@ function renderMonthStats(){
   var byNum={};
   d.days.forEach(function(x){ byNum[+x.date.split('-')[2]]=x; });
 
-  // ---- grafico ORIZZONTALE: giorni sull'asse X (sotto), voti 1-10 sull'asse Y
-  // con le etichette dei valori a DESTRA.
+  // ---- grafico ORIZZONTALE: giorni sull'asse X (sotto), mood 1-10 sull'asse Y
+  // con le etichette dei valori a DESTRA. Una sola linea (mood), non più 3.
   var COL=11;                                   // larghezza per giorno
   var PL=6, PR=20, PT=10, PB=18;                // PR = spazio numeri voto (a destra)
   var W=PL+PR+daysInMonth*COL, H=190;
@@ -1258,79 +1253,65 @@ function renderMonthStats(){
   function X(n){ return PL + (n-0.5)*COL; }     // giorno n al centro della sua colonna
   function Y(v){ return PT + (10-v)/9*ih; }     // voto 1..10 → basso..alto
 
-  // griglia orizzontale su OGNI valore 1..10 + numeri A DESTRA
   var grid='', ylab='';
   for(var v=1; v<=10; v++){
     var strong=(v===1||v===5||v===10);
     grid+='<line class="ms-grid'+(strong?' strong':'')+'" x1="'+PL+'" y1="'+Y(v).toFixed(1)+'" x2="'+(W-PR).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'"/>';
     ylab+='<text class="ms-ylab" x="'+(W-PR+4).toFixed(1)+'" y="'+(Y(v)+3).toFixed(1)+'">'+v+'</text>';
   }
-  // etichette giorni: TUTTI i numeri sotto (alternati su 2 righe per non sovrapporsi)
   var xlab='';
   for(var n=1;n<=daysInMonth;n++){
     var y = (n%2===1) ? (H-9) : (H-1);          // dispari sopra, pari sotto
     xlab+='<text class="ms-xlab" x="'+X(n).toFixed(1)+'" y="'+y+'">'+n+'</text>';
   }
 
-  function path(field){
-    var started=false, out='';
-    for(var n=1;n<=daysInMonth;n++){
-      var rec=byNum[n];
-      var v=rec ? _clamp10(rec[field]) : null;
-      if(v==null){ started=false; continue; }    // giorno non votato: spezza la linea
-      out += (started?' L':' M') + X(n).toFixed(1) + ' ' + Y(v).toFixed(1);
-      started=true;
-    }
-    return out.trim();
+  var path='', started=false;
+  for(var n=1;n<=daysInMonth;n++){
+    var rec=byNum[n];
+    if(!rec){ started=false; continue; }    // giorno non votato: spezza la linea
+    path += (started?' L':' M') + X(n).toFixed(1) + ' ' + Y(rec.mood).toFixed(1);
+    started=true;
   }
-  // i pallini portano i dati per la bolla (tap/hover)
-  function dots(f){
-    var s='';
-    for(var n=1;n<=daysInMonth;n++){
-      var rec=byNum[n]; if(!rec) continue;
-      var v=_clamp10(rec[f.k]); if(v==null) continue;
-      s+='<circle class="ms-dot '+f.cls+'" cx="'+X(n).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="3"'
-       + ' data-lab="'+f.lab+'" data-val="'+(Math.round(rec[f.k]*10)/10)+'" data-day="'+n+'"/>';
-    }
-    return s;
+  var points='';
+  for(var n2=1;n2<=daysInMonth;n2++){
+    var rec2=byNum[n2]; if(!rec2) continue;
+    points+='<circle class="ms-dot m" cx="'+X(n2).toFixed(1)+'" cy="'+Y(rec2.mood).toFixed(1)+'" r="3"'
+      + ' data-val="'+rec2.mood+'" data-day="'+n2+'"/>';
   }
-  var lines='', points='';
-  MS_FIELDS.forEach(function(f){
-    lines += '<path class="ms-line '+f.cls+'" d="'+path(f.k)+'"/>';
-    points += dots(f);
-  });
 
   var svg='<svg class="ms-chart" id="ms-svg" viewBox="0 0 '+W+' '+H+'">'
-    + grid + xlab + ylab + lines + points + '</svg>';
+    + grid + xlab + ylab + '<path class="ms-line m" d="'+path+'"/>' + points + '</svg>';
 
-  var legend='<div class="ms-legend">'
-    + MS_FIELDS.map(function(f){ return '<span class="ms-lg '+f.cls+'">'+f.lab+'</span>'; }).join('')
-    + '</div>';
+  // ---- media del mese, grande, al centro ----
+  var mFace = d.avgMood==null ? '' : ' <span class="tk-rc-face '+moodClass(Math.round(d.avgMood))+'">'+moodFace(Math.round(d.avgMood))+'</span>';
+  var avgHTML = '<div class="ms-avg-big">'+(d.avgMood==null?'—':d.avgMood.toFixed(1))+mFace+'</div>'
+    + '<div class="ms-avg-lab">media del mese ('+d.days.length+' giorni votati)</div>';
 
-  // ---- medie del mese ----
-  function box(lab, val, extra){
-    var t = val==null ? '—' : val.toFixed(1);
-    return '<div class="tk-rc"><div class="tk-rc-lab">'+lab+'</div><div class="tk-rc-val">'+t+(extra||'')+'</div></div>';
+  // ---- top 3-5 emozioni con conteggio ----
+  var topHTML = '';
+  if(d.topEmotions && d.topEmotions.length){
+    topHTML = '<div class="ms-top-title">emozioni più frequenti</div><div class="ms-top-list">'
+      + d.topEmotions.map(function(t){
+          var def=EMOTIONS.filter(function(e){return e.id===t.id;})[0];
+          var img = def ? '<img src="emo/'+def.file+'" alt="'+t.id+'">' : '';
+          return '<div class="ms-top-item">'+img+'<span>'+t.id+' ×'+t.count+'</span></div>';
+        }).join('')
+      + '</div>';
   }
-  var a=d.avg||{};
-  var mFace = a.mood==null ? '' : ' <span class="tk-rc-face '+moodClass(Math.round(_clamp10(a.mood)))+'">'+moodFace(Math.round(_clamp10(a.mood)))+'</span>';
-  var avgHTML='<div class="tk-recap-title">media del mese ('+(a.n||0)+' giorni votati)</div>'
-    + '<div class="tk-recap-row">'+box('piacevolezza',a.pleasure)+box('utilità',a.utility)+box('mood',a.mood,mFace)+'</div>';
 
   _setHTML(document.getElementById('ms-body'),
-    legend + '<div class="ms-chart-wrap">'+svg+'<div id="ms-tip" class="ms-tip hidden"></div></div>'
-    + '<div class="ms-avg">'+avgHTML+'</div>');
+    '<div class="ms-chart-wrap">'+svg+'<div id="ms-tip" class="ms-tip hidden"></div></div>'
+    + '<div class="ms-avg">'+avgHTML+'</div>' + topHTML);
   _wireMsDots();
 }
 
-// bolla con "cos'è + voto" al tap/hover su un pallino
+// bolla con il voto al tap/hover su un pallino
 function _wireMsDots(){
   var wrap=document.querySelector('.ms-chart-wrap'); if(!wrap) return;
   var tip=document.getElementById('ms-tip');
   var svg=document.getElementById('ms-svg');
   function show(c){
-    tip.textContent = c.getAttribute('data-lab')+' '+c.getAttribute('data-val')+' · giorno '+c.getAttribute('data-day');
-    // posizione: converte le coordinate SVG in pixel del contenitore
+    tip.textContent = 'mood '+c.getAttribute('data-val')+' · giorno '+c.getAttribute('data-day');
     var r=svg.getBoundingClientRect(), wr=wrap.getBoundingClientRect();
     var vb=svg.viewBox.baseVal;
     var px=(+c.getAttribute('cx'))/vb.width*r.width + (r.left-wr.left);
@@ -1348,157 +1329,145 @@ function _wireMsDots(){
   svg.addEventListener('click', hide);   // tap altrove = chiudi la bolla
 }
 
-// ====== MODAL VOTI (unico) ======
-var rateState = { slot:null, rec:null, acIdx:-1 };
-// storico attività dal DB (per l'autocomplete), caricato una volta e riusato
-var actHistory = [];
+// ====== MODAL VOTO GIORNALIERO (mood 1-10 + emozioni) ======
+// EMOTIONS: stessa tabella del backend (MoodLog.gs), duplicata qui perché il
+// frontend è statico e non esegue codice GAS. Tenerle sincronizzate a mano
+// se si aggiungono nuove emozioni in futuro.
+var EMOTIONS = [
+  { id:'disperato',   file:'Disperato.png',   scaglione:'1-2' },
+  { id:'devastato',   file:'Devastato.png',   scaglione:'1-2' },
+  { id:'distrutto',   file:'distrutto.png',   scaglione:'1-2' },
+  { id:'triste',      file:'triste.png',      scaglione:'3-4' },
+  { id:'solo',        file:'solo.png',        scaglione:'3-4' },
+  { id:'scoraggiato', file:'scoraggiato.png', scaglione:'3-4' },
+  { id:'irritato',    file:'irritato.png',    scaglione:'3-4' },
+  { id:'frustrato',   file:'frustrato.png',   scaglione:'3-4' },
+  { id:'sopraffatto', file:'sopraffatto.png', scaglione:'3-4' },
+  { id:'ansia',       file:'ansia.png',       scaglione:'3-4' },
+  { id:'preoccupato', file:'preoccupato.png', scaglione:'3-4' },
+  { id:'apatico',     file:'apatico.png',     scaglione:'5-6' },
+  { id:'annoiato',    file:'annoiato.png',    scaglione:'5-6' },
+  { id:'confuso',     file:'confuso.png',     scaglione:'5-6' },
+  { id:'indeciso',    file:'indeciso.png',    scaglione:'5-6' },
+  { id:'distratto',   file:'distratto.png',   scaglione:'5-6' },
+  { id:'svogliato',   file:'svogliato.png',   scaglione:'5-6' },
+  { id:'pensieroso',  file:'pensieroso.png',  scaglione:'5-6' },
+  { id:'sereno',      file:'sereno.png',      scaglione:'7-8' },
+  { id:'soddisfatto', file:'soddisfatto.png', scaglione:'7-8' },
+  { id:'fiducioso',   file:'fiducioso.png',   scaglione:'7-8' },
+  { id:'curioso',     file:'curioso.png',     scaglione:'7-8' },
+  { id:'divertito',   file:'divertito.png',   scaglione:'7-8' },
+  { id:'affettuoso',  file:'affettuoso.png',  scaglione:'7-8' },
+  { id:'motivato',    file:'motivato.png',    scaglione:'7-8' },
+  { id:'energico',    file:'energico.png',    scaglione:'7-8' },
+  { id:'euforico',    file:'euforico.png',    scaglione:'9-10' },
+  { id:'estasiato',   file:'estasiato.png',   scaglione:'9-10' },
+  { id:'orgoglioso',  file:'orgoglioso.png',  scaglione:'9-10' },
+  { id:'ispirato',    file:'ispirato.png',    scaglione:'9-10' },
+  { id:'innamorato',  file:'innamorato.png',  scaglione:'9-10' },
+  { id:'invincibile', file:'invinicbile.png', scaglione:'9-10' },
+  { id:'nostalgico',      file:'nostalgico.png',      scaglione:'trasversale' },
+  { id:'disagio',         file:'disagio.png',         scaglione:'trasversale' },
+  { id:'bisogno-intimo',  file:'bisogno-intimo.png',  scaglione:'trasversale' },
+  { id:'eccitato-sex',    file:'eccitato-sex.png',    scaglione:'trasversale' },
+  { id:'frustrato-sex',   file:'frustrato-sex.png',   scaglione:'trasversale' },
+  { id:'soddisfatto-sex', file:'soddisfatto-sex.png', scaglione:'trasversale' }
+];
+var SCAGLIONI_ORDER = ['1-2','3-4','5-6','7-8','9-10'];
+var SCAGLIONI_LABEL = { '1-2':'Malissimo', '3-4':'Male', '5-6':'Neutro', '7-8':'Bene', '9-10':'Benissimo' };
+function scaglioneOfMood(m){ if(m<=2) return '1-2'; if(m<=4) return '3-4'; if(m<=6) return '5-6'; if(m<=8) return '7-8'; return '9-10'; }
+function _emotionsByScaglione(sc){ return EMOTIONS.filter(function(e){ return e.scaglione===sc; }); }
 
-// minuti dall'inizio giornata per una 'HH:mm'
-function _hm(t){ var p=String(t).split(':'); return (+p[0])*60+(+p[1]); }
-// voci d'agenda del giorno che cadono nella fascia: eventi con orario dentro [start,end)
-// + i todo del giorno (senza orario), utili come promemoria di cosa c'era da fare.
-function _entriesInSlot(date, slot){
-  var s=_hm(slot.split('-')[0]), e=_hm(slot.split('-')[1]);
-  return cache.entries.filter(function(en){
-    if(en._deleted || en.date!==date) return false;
-    if(!en.time){ return true; }                 // todo del giorno: sempre suggerito
-    var m=_hm(en.time); return m>=s && m<e;       // evento con orario dentro la fascia
-  }).map(function(en){ return en.title; });
-}
-// scarica lo storico attività dal foglio Tracking (non da localStorage: la cache si pulisce)
-function loadActivities(){
-  apiGet({ action:'getActivities' })
-    .then(function(list){ if(list&&list.length) actHistory=list; })
-    .catch(function(e){ console.warn('getActivities bg:',e.message); });
-}
-
-// ---- autocomplete "cos'ho fatto" ----
-// L'input è UNO solo; i suggerimenti completano l'ULTIMO pezzo dopo l'ultimo ' + '.
-function _acParts(v){ return String(v).split('+'); }
-function _acCurrentTerm(){
-  var v=document.getElementById('rate-act').value;
-  var parts=_acParts(v);
-  return parts[parts.length-1].trim();
-}
-// candidati: eventi della fascia + storico DB, senza duplicati e senza quelli già scritti
-function _acCandidates(term){
-  var already=_acParts(document.getElementById('rate-act').value)
-    .slice(0,-1).map(function(s){ return s.trim().toLowerCase(); });
-  var pool=_entriesInSlot(tkState.date, rateState.slot).concat(actHistory);
-  var seen={}, out=[];
-  pool.forEach(function(t){
-    var k=String(t).trim(); if(!k) return;
-    var lk=k.toLowerCase();
-    if(seen[lk] || already.indexOf(lk)>=0) return;
-    if(term && lk.indexOf(term.toLowerCase())<0) return;   // filtra per quello che stai scrivendo
-    seen[lk]=true; out.push(k);
-  });
-  return out.slice(0,6);
-}
-function _renderAC(){
-  var box=document.getElementById('rate-ac');
-  var term=_acCurrentTerm();
-  rateState.acIdx=-1;
-  // la tendina compare SOLO mentre stai digitando (almeno 1 lettera), non a campo vuoto
-  if(!term){ box.classList.add('hidden'); box.innerHTML=''; return; }
-  var list=_acCandidates(term);
-  if(!list.length){ box.classList.add('hidden'); box.innerHTML=''; return; }
-  box.innerHTML=list.map(function(t,i){
-    return '<button class="rate-ac-item" data-i="'+i+'" data-t="'+_esc(t)+'">'+_esc(t)+'</button>';
-  }).join('');
-  Array.prototype.forEach.call(box.querySelectorAll('.rate-ac-item'), function(b){
-    b.addEventListener('mousedown', function(ev){ ev.preventDefault(); _acPick(b.getAttribute('data-t')); });
-  });
-  box.classList.remove('hidden');
-}
-// completa l'ultimo pezzo scritto, SENZA aggiungere il '+' (che darebbe fastidio quando
-// l'attività è una sola). Per aggiungerne un'altra basta digitare ' + ' o premere il tasto '+'.
-function _acPick(text){
-  var el=document.getElementById('rate-act');
-  var parts=_acParts(el.value);
-  parts[parts.length-1]=' '+text;
-  el.value=parts.join('+').replace(/^\s+/,'');
-  el.focus();
-  var box=document.getElementById('rate-ac');
-  box.classList.add('hidden'); box.innerHTML=''; rateState.acIdx=-1;   // scelto: chiudi
-}
+// cache locale del voto giornaliero (così il bookmark non è vuoto per qualche secondo)
+function _moodCacheGet(date){ try{ return JSON.parse(localStorage.getItem('ql_mood_'+date)||'null'); }catch(e){ return null; } }
+function _moodCacheSet(date, rec){ try{ localStorage.setItem('ql_mood_'+date, JSON.stringify(rec)); }catch(e){} }
 
 // mood 1-10 a fasce (scala presa da Ale): 1-2 pessimo … 9-10 stellare
 function moodFace(v){ return v<=2?'😖':v<=4?'🙁':v<=6?'😐':v<=8?'🙂':'😄'; }
 function moodClass(v){ return v<=2?'m1':v<=4?'m3':v<=6?'m5':v<=8?'m7':'m9'; }
 
-function openRate(slot){
-  rateState.slot=slot;
-  var ex = tkState.bySlot[slot];
-  rateState.rec = ex ? { date:tkState.date, slot:slot, id:ex.id, activity:ex.activity||'',
-                         pleasure:ex.pleasure, utility:ex.utility, mood:ex.mood }
-                     : { date:tkState.date, slot:slot, activity:'', pleasure:null, utility:null, mood:null };
-  document.getElementById('rate-slot').textContent = slot.replace('-',' – ');
-  document.getElementById('rate-act').value = rateState.rec.activity||'';
-  document.getElementById('rate-pleasure').value = rateState.rec.pleasure||5;
-  document.getElementById('rate-utility').value = rateState.rec.utility||5;
-  document.getElementById('rate-mood').value = rateState.rec.mood||5;
+var rateState = { date:null, mood:5, emotions:[], moreOpen:false, extraScaglione:null };
+
+function _emoGridHtml(list){
+  return list.map(function(e){
+    var sel = rateState.emotions.indexOf(e.id)>=0 ? ' sel' : '';
+    return '<button type="button" class="rate-emo-item'+sel+'" data-id="'+e.id+'" onclick="_toggleEmotion(\''+e.id+'\')">'
+      + '<img src="emo/'+e.file+'" alt="'+e.id+'"><span>'+e.id+'</span></button>';
+  }).join('');
+}
+function _renderEmoUI(){
+  document.getElementById('rate-emo-primary').innerHTML = _emoGridHtml(_emotionsByScaglione(scaglioneOfMood(rateState.mood)));
+  document.getElementById('rate-emo-trasversali').innerHTML = _emoGridHtml(_emotionsByScaglione('trasversale'));
+  document.getElementById('rate-emo-scaglioni-btns').innerHTML = SCAGLIONI_ORDER.map(function(sc){
+    var sel = rateState.extraScaglione===sc ? ' sel' : '';
+    return '<button type="button" class="rate-emo-sc-btn'+sel+'" onclick="_pickExtraScaglione(\''+sc+'\')">'+SCAGLIONI_LABEL[sc]+'</button>';
+  }).join('');
+  document.getElementById('rate-emo-scaglione-extra').innerHTML = rateState.extraScaglione
+    ? _emoGridHtml(_emotionsByScaglione(rateState.extraScaglione)) : '';
+}
+function _toggleEmotion(id){
+  var i=rateState.emotions.indexOf(id);
+  if(i>=0) rateState.emotions.splice(i,1); else rateState.emotions.push(id);
+  _renderEmoUI();
+}
+function _pickExtraScaglione(sc){
+  rateState.extraScaglione = rateState.extraScaglione===sc ? null : sc;
+  _renderEmoUI();
+}
+function toggleEmoMore(){
+  rateState.moreOpen=!rateState.moreOpen;
+  document.getElementById('rate-emo-more').classList.toggle('hidden', !rateState.moreOpen);
+  document.getElementById('rate-emo-more-btn').textContent = rateState.moreOpen ? '– Nascondi' : '+ Aggiungi emozione';
+}
+
+function openRate(){
+  rateState.date = state.anchor;
+  var ex = _moodCacheGet(rateState.date);
+  rateState.mood = (ex && ex.mood) || 5;
+  rateState.emotions = (ex && ex.emotions) ? ex.emotions.slice() : [];
+  rateState.moreOpen = false;
+  rateState.extraScaglione = null;
+  var p=rateState.date.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
+  var oggi = rateState.date===_todayISO();
+  document.getElementById('rate-slot').textContent = d.getDate()+' '+MESI[d.getMonth()]+(oggi?' (oggi)':'');
+  document.getElementById('rate-mood').value = rateState.mood;
+  document.getElementById('rate-emo-more').classList.add('hidden');
+  document.getElementById('rate-emo-more-btn').textContent = '+ Aggiungi emozione';
   _rateSyncLabels();
-  document.getElementById('rate-ac').classList.add('hidden');
+  _renderEmoUI();
   document.getElementById('rate').classList.remove('hidden');
-  setTimeout(function(){ document.getElementById('rate-act').focus(); }, 80);
+  apiGet({ action:'getMoodLog', date:rateState.date }).then(function(fresh){
+    _moodCacheSet(rateState.date, fresh);
+    // aggiorna solo se il popup è ancora aperto sulla stessa data (evita di
+    // sovrascrivere scelte già fatte dall'utente mentre arrivava la risposta)
+    if(!document.getElementById('rate').classList.contains('hidden') && rateState.date===state.anchor && fresh){
+      rateState.mood=fresh.mood; rateState.emotions=fresh.emotions.slice();
+      document.getElementById('rate-mood').value=rateState.mood;
+      _rateSyncLabels(); _renderEmoUI();
+    }
+  }).catch(function(e){ console.warn('getMoodLog bg:',e.message); });
 }
-function closeRate(){
-  document.getElementById('rate').classList.add('hidden');
-  document.getElementById('rate-ac').classList.add('hidden');
-}
-// aggiorna numeri e faccina accanto alle etichette
+function closeRate(){ document.getElementById('rate').classList.add('hidden'); }
+// aggiorna numero e faccina accanto allo slider mood
 function _rateSyncLabels(){
-  var p=+document.getElementById('rate-pleasure').value;
-  var u=+document.getElementById('rate-utility').value;
   var m=+document.getElementById('rate-mood').value;
-  document.getElementById('rate-pleasure-val').textContent=p;
-  document.getElementById('rate-utility-val').textContent=u;
+  rateState.mood=m;
   document.getElementById('rate-mood-val').textContent=m;
   var face=document.getElementById('rate-mood-face');
   face.textContent=moodFace(m);
   face.className='rate-face '+moodClass(m);
   document.getElementById('rate-mood').className='rate-slider mood '+moodClass(m);
 }
-// salva: pulisce il testo dai ' + ' pendenti, scrive cache+UI subito, poi manda al backend
+document.getElementById('rate-mood').addEventListener('input', function(){ _rateSyncLabels(); _renderEmoUI(); });
 function rateSave(){
-  var raw=document.getElementById('rate-act').value;
-  var act=raw.split('+').map(function(s){ return s.trim(); }).filter(function(s){ return s; }).join(' + ');
-  var rec=rateState.rec;
-  rec.activity=act;
-  rec.pleasure=+document.getElementById('rate-pleasure').value;
-  rec.utility=+document.getElementById('rate-utility').value;
-  rec.mood=+document.getElementById('rate-mood').value;
-  tkState.bySlot[rec.slot]=rec; _trkCacheSet(tkState.date, tkState.bySlot);   // UI + cache subito
+  var rec={ date:rateState.date, mood:rateState.mood, emotions:rateState.emotions.slice() };
+  _moodCacheSet(rec.date, rec);   // UI + cache subito
   closeRate();
-  renderTracking(); refreshBookmarkBadge();
-  apiPost({ action:'setTracking', rec:rec })
-    .then(function(saved){
-      if(saved){ tkState.bySlot[saved.slot]=saved; _trkCacheSet(tkState.date, tkState.bySlot); }
-      loadActivities();   // la nuova attività entra nello storico dei suggerimenti
-    })
-    .catch(function(e){ console.warn('tracking save bg:',e.message); });
+  refreshBookmarkBadge();
+  apiPost({ action:'setMoodLog', rec:rec })
+    .then(function(saved){ if(saved){ _moodCacheSet(rec.date, saved); } })
+    .catch(function(e){ console.warn('mood save bg:',e.message); });
 }
-// wiring modal voti
-document.getElementById('rate-act').addEventListener('input', _renderAC);
-document.getElementById('rate-act').addEventListener('keydown', function(e){
-  var box=document.getElementById('rate-ac');
-  var items=box.querySelectorAll('.rate-ac-item');
-  if(e.key==='ArrowDown' && items.length){ e.preventDefault();
-    rateState.acIdx=Math.min(rateState.acIdx+1, items.length-1); _acHighlight(items); }
-  else if(e.key==='ArrowUp' && items.length){ e.preventDefault();
-    rateState.acIdx=Math.max(rateState.acIdx-1, 0); _acHighlight(items); }
-  else if(e.key==='Enter'){ e.preventDefault();
-    if(rateState.acIdx>=0 && items[rateState.acIdx]) _acPick(items[rateState.acIdx].getAttribute('data-t'));
-    else box.classList.add('hidden');
-  }
-});
-function _acHighlight(items){
-  Array.prototype.forEach.call(items, function(it,i){ it.classList.toggle('on', i===rateState.acIdx); });
-}
-document.getElementById('rate-pleasure').addEventListener('input', _rateSyncLabels);
-document.getElementById('rate-utility').addEventListener('input', _rateSyncLabels);
-document.getElementById('rate-mood').addEventListener('input', _rateSyncLabels);
 // tap sullo sfondo = chiudi senza salvare (c'è il bottone Salva)
 document.getElementById('rate').addEventListener('click', function(e){
   if(e.target===this) closeRate();
