@@ -558,7 +558,7 @@ body{
   box-shadow:0 16px 40px rgba(0,0,0,.4); text-align:center; font-family:'Patrick Hand',cursive; color:var(--ink);
   animation:popIn .24s ease; position:relative;
   display:flex; flex-direction:column; }
-.rate-slot{ flex-shrink:0; font-weight:700; font-size:15px; color:var(--ink-soft); margin-bottom:6px; }
+.rate-slot{ display:none; }
 .rate-field{ flex-shrink:0; text-align:left; margin:14px 0; }
 .rate-emo-scroll{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
 .rate-actions{ flex-shrink:0; }
@@ -575,11 +575,11 @@ body{
 .rate-slider.mood.m9{ accent-color:#3f9b52; }
 .rate-face.m1{ filter:none; } /* la faccina cambia con moodFace(), il colore lo dà lo slider */
 
-/* griglia emozioni: SEMPRE 3 colonne fisse (più spazio, icone più grandi) */
-.rate-emo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0; }
-.rate-emo-item{ display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 2px;
+/* griglia emozioni: SEMPRE 3 colonne fisse, niente gap (icone grandi, poco spreco) */
+.rate-emo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:0; margin:10px 0; }
+.rate-emo-item{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:2px;
   border:2px solid transparent; border-radius:10px; background:transparent; cursor:pointer; }
-.rate-emo-item img{ width:60px; height:60px; object-fit:contain; }
+.rate-emo-item img{ width:88px; height:88px; object-fit:contain; }
 .rate-emo-item span{ font-family:'Patrick Hand',cursive; font-size:12px; color:var(--ink-soft); text-transform:capitalize; }
 .rate-emo-item.sel{ border-color:var(--ink); background:rgba(0,0,0,.06); }
 .rate-emo-item.sel span{ color:var(--ink); font-weight:700; }
@@ -587,9 +587,9 @@ body{
 .rate-emo-more-btn{ width:100%; font-family:'Patrick Hand',cursive; font-size:15px; cursor:pointer;
   padding:8px; margin:6px 0 4px; border-radius:8px; border:2px dashed var(--ink-soft);
   background:transparent; color:var(--ink-soft); }
-.rate-emo-scaglioni-btns{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
-.rate-emo-sc-btn{ font-family:'Patrick Hand',cursive; font-size:13px; cursor:pointer;
-  padding:5px 10px; border-radius:8px; border:2px solid var(--ink-soft); background:transparent; color:var(--ink-soft); }
+.rate-emo-scaglioni-btns{ display:flex; gap:4px; flex-wrap:nowrap; margin-bottom:6px; }
+.rate-emo-sc-btn{ flex:1; min-width:0; font-family:'Patrick Hand',cursive; font-size:12px; cursor:pointer;
+  padding:5px 4px; border-radius:8px; border:2px solid var(--ink-soft); background:transparent; color:var(--ink-soft); }
 .rate-emo-sc-btn.sel{ border-color:var(--ink); color:var(--ink); background:rgba(0,0,0,.06); }
 
 .rate-actions{ display:flex; gap:12px; justify-content:flex-end; margin-top:20px; }

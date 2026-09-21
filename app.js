@@ -1374,7 +1374,7 @@ var EMOTIONS = [
   { id:'soddisfatto-sex', file:'soddisfatto-sex.png', scaglione:'trasversale' }
 ];
 var SCAGLIONI_ORDER = ['1-2','3-4','5-6','7-8','9-10'];
-var SCAGLIONI_LABEL = { '1-2':'Giù del tutto', '3-4':'In difficoltà', '5-6':'Così così', '7-8':'Sereno', '9-10':'Al top' };
+var SCAGLIONI_LABEL = { '1-2':'Che merda', '3-4':'Aiuto', '5-6':'Ok', '7-8':'Bene', '9-10':'TOP' };
 function scaglioneOfMood(m){ if(m<=2) return '1-2'; if(m<=4) return '3-4'; if(m<=6) return '5-6'; if(m<=8) return '7-8'; return '9-10'; }
 function _emotionsByScaglione(sc){ return EMOTIONS.filter(function(e){ return e.scaglione===sc; }); }
 
