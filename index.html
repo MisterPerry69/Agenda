@@ -221,25 +221,41 @@
     <div class="rate-card">
       <div id="rate-slot" class="rate-slot">—</div>
 
-      <div class="rate-field">
-        <div class="rate-q">Mood <span id="rate-mood-val" class="rate-num">5</span><span id="rate-mood-face" class="rate-face">😐</span></div>
-        <input id="rate-mood" class="rate-slider mood" type="range" min="1" max="10" value="5">
-      </div>
-
-      <div class="rate-emo-scroll">
-        <div id="rate-emo-primary" class="rate-emo-grid"></div>
-
-        <button id="rate-emo-more-btn" type="button" class="rate-emo-more-btn" onclick="toggleEmoMore()">+ Aggiungi emozione</button>
-        <div id="rate-emo-more" class="hidden">
-          <div id="rate-emo-trasversali" class="rate-emo-grid"></div>
-          <div id="rate-emo-scaglioni-btns" class="rate-emo-scaglioni-btns"></div>
-          <div id="rate-emo-scaglione-extra" class="rate-emo-grid"></div>
+      <!-- RECAP (giorno già votato): mood grande + emozioni + eventuale matita -->
+      <div id="rate-recap" class="rate-recap hidden">
+        <button id="rate-recap-edit" type="button" class="rate-recap-edit" onclick="rateEdit()" title="Modifica">✏️</button>
+        <div class="rate-recap-mood">
+          <span id="rate-recap-face" class="rate-recap-face">😐</span>
+          <span id="rate-recap-val" class="rate-recap-val">5</span>
         </div>
+        <div id="rate-recap-nodist" class="rate-recap-nodist hidden">📵 NO DISTRACTION</div>
+        <div id="rate-recap-emo" class="rate-emo-grid rate-recap-scroll"></div>
       </div>
 
-      <div class="rate-actions">
-        <button class="rate-cancel" onclick="closeRate()">Annulla</button>
-        <button class="rate-save" onclick="rateSave()">Salva</button>
+      <!-- FORM (nuovo voto o modifica) -->
+      <div id="rate-form">
+        <div class="rate-field">
+          <div class="rate-q">Mood <span id="rate-mood-val" class="rate-num">5</span><span id="rate-mood-face" class="rate-face">😐</span></div>
+          <input id="rate-mood" class="rate-slider mood" type="range" min="1" max="10" value="5">
+        </div>
+
+        <div class="rate-emo-scroll">
+          <div id="rate-emo-primary" class="rate-emo-grid"></div>
+
+          <button id="rate-emo-more-btn" type="button" class="rate-emo-more-btn" onclick="toggleEmoMore()">+ Aggiungi emozione</button>
+          <div id="rate-emo-more" class="hidden">
+            <div id="rate-emo-trasversali" class="rate-emo-grid"></div>
+            <div id="rate-emo-scaglioni-btns" class="rate-emo-scaglioni-btns"></div>
+            <div id="rate-emo-scaglione-extra" class="rate-emo-grid"></div>
+          </div>
+
+          <label class="rate-nodist-row"><input id="rate-nodist" type="checkbox"> 📵 NO DISTRACTION</label>
+        </div>
+
+        <div class="rate-actions">
+          <button class="rate-cancel" onclick="closeRate()">Annulla</button>
+          <button class="rate-save" onclick="rateSave()">Salva</button>
+        </div>
       </div>
     </div>
   </div>

@@ -559,9 +559,25 @@ body{
   animation:popIn .24s ease; position:relative;
   display:flex; flex-direction:column; }
 .rate-slot{ display:none; }
+#rate-form{ flex:1; min-height:0; display:flex; flex-direction:column; }
 .rate-field{ flex-shrink:0; text-align:left; margin:14px 0; }
 .rate-emo-scroll{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
 .rate-actions{ flex-shrink:0; }
+.rate-nodist-row{ display:flex; align-items:center; gap:8px; font-family:'Patrick Hand',cursive;
+  font-size:15px; color:var(--ink); cursor:pointer; margin:16px 0 4px; padding-top:12px;
+  border-top:2px dashed rgba(0,0,0,.15); }
+.rate-nodist-row input{ width:18px; height:18px; accent-color:var(--ink); }
+
+/* ---- RECAP (giorno già votato): mood grande + emozioni, sola lettura ---- */
+.rate-recap{ flex:1; min-height:0; display:flex; flex-direction:column; position:relative; }
+.rate-recap-edit{ position:absolute; top:0; right:0; background:none; border:none; font-size:20px; cursor:pointer; padding:4px; }
+.rate-recap-mood{ flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:2px; margin:6px 0 4px; }
+.rate-recap-face{ font-size:48px; line-height:1; }
+.rate-recap-val{ font-family:'Patrick Hand',cursive; font-size:34px; font-weight:700; color:var(--ink); }
+.rate-recap-nodist{ flex-shrink:0; text-align:center; font-family:'Patrick Hand',cursive; font-size:14px;
+  color:var(--ink-soft); margin-bottom:6px; }
+.rate-recap-scroll{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.rate-recap .rate-emo-item{ cursor:default; }
 .rate-q{ font-size:19px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
 .rate-num{ margin-left:auto; font-weight:700; font-size:22px; color:var(--red); }
 /* nel mood il numero ha già margin-left:auto → la faccina lo segue subito */
@@ -626,6 +642,7 @@ body{
 .ms-top-title{ font-family:'Patrick Hand',cursive; font-size:13px; color:var(--ink-soft);
   text-transform:uppercase; letter-spacing:.5px; margin:16px 0 8px; text-align:center; }
 .ms-top-list{ display:flex; flex-direction:column; gap:8px; }
+.ms-top-list + .ms-top-list{ margin-top:8px; padding-top:8px; border-top:1px dashed rgba(0,0,0,.15); }
 .ms-top-item{ display:flex; align-items:center; gap:10px; font-family:'Patrick Hand',cursive;
   font-size:17px; color:var(--ink); }
 .ms-top-item img{ width:32px; height:32px; object-fit:contain; }

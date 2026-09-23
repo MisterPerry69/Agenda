@@ -619,7 +619,6 @@ function openEditor(id){
         document.getElementById('ed-todo').classList.add('hidden');
         document.getElementById('ed-extend').classList.add('hidden');
         document.getElementById('ed-move').classList.add('hidden');
-        document.getElementById('ed-google').classList.add('hidden');
         document.getElementById('ed-recurring').classList.add('hidden');
         document.getElementById('ed-rec-start').value=e.date;
         document.getElementById('ed-rec-time').value=e.time||'';
@@ -690,9 +689,8 @@ function onMoveToggle(){
 }
 
 // ====== MODALITÀ RICORRENTE (bottone 🔁 nell'editor) ======
-// notifiche di default per gli impegni ricorrenti: sempre su Google Calendar,
-// 1 giorno prima (1440min) + il giorno stesso (0min) — nessuna scelta manuale.
-var REC_DEFAULT_REMINDERS = [0, 1440];
+// notifiche: stessa scelta manuale (popup rem-modal) degli impegni singoli,
+// niente più default fisso "1 giorno prima + orario esatto".
 function onRecurringToggle(){
   var isRec = !document.getElementById('editor').classList.contains('is-recurring');
   document.getElementById('editor').classList.toggle('is-recurring', isRec);
@@ -703,7 +701,6 @@ function onRecurringToggle(){
   document.getElementById('ed-todo').classList.toggle('hidden', isRec);
   document.getElementById('ed-extend').classList.toggle('hidden', isRec);
   document.getElementById('ed-move').classList.toggle('hidden', isRec);
-  document.getElementById('ed-google').classList.toggle('hidden', isRec);
   if(isRec){
     _toggleSet('ed-todo', false);
     _toggleSet('ed-extend', false);
@@ -754,14 +751,14 @@ function saveEntry(){
     var recStart=document.getElementById('ed-rec-start').value || state.anchor;
     var recFreq=document.getElementById('ed-rec-freq').value;
     var recInterval=Math.max(1, +document.getElementById('ed-rec-interval').value || 1);
-    // Google Calendar è sempre attivo per i ricorrenti, con notifiche fisse di default
-    var onGoogleRec=true;
+    var onGoogleRec=_toggleGet('ed-google');
+    var recReminders=onGoogleRec ? (state.selReminders||[]).slice() : [];
 
     if(state.editing && state.editing.seriesId){
       // modifica di un'occorrenza esistente: chiede scope, poi propaga
       var entryMod={ id:state.editing.id, seriesId:state.editing.seriesId, date:recStart, time:recTime,
         title:title, category:state.selCat, onGoogle:onGoogleRec, allDay:allDay,
-        reminders:REC_DEFAULT_REMINDERS.slice(),
+        reminders:recReminders,
         eventId:state.editing.eventId, done:state.editing.done||false, dateEnd:'', timeEnd:'' };
       closeEditor();
       _askScope('Modifica ricorrenza').then(function(scope){
@@ -776,7 +773,7 @@ function saveEntry(){
     // nuova serie
     var count = recFreq==='year' ? 40 : (recFreq==='day' ? 30 : 12);
     var newSeries={ date:recStart, time:recTime, title:title, category:state.selCat,
-      onGoogle:onGoogleRec, reminders:REC_DEFAULT_REMINDERS.slice(),
+      onGoogle:onGoogleRec, reminders:recReminders,
       recurring:{ rule:{freq:recFreq, interval:recInterval}, allDay:allDay, count:count } };
     closeEditor();
     apiPost({ action:'addEntry', entry:newSeries })
@@ -1298,6 +1295,9 @@ function renderMonthStats(){
         }).join('')
       + '</div>';
   }
+  if(d.noDistractionCount){
+    topHTML += '<div class="ms-top-list"><div class="ms-top-item"><span>📵</span><span>NO DISTRACTION ×'+d.noDistractionCount+'</span></div></div>';
+  }
 
   _setHTML(document.getElementById('ms-body'),
     '<div class="ms-chart-wrap">'+svg+'<div id="ms-tip" class="ms-tip hidden"></div></div>'
@@ -1386,7 +1386,7 @@ function _moodCacheSet(date, rec){ try{ localStorage.setItem('ql_mood_'+date, JS
 function moodFace(v){ return v<=2?'😖':v<=4?'🙁':v<=6?'😐':v<=8?'🙂':'😄'; }
 function moodClass(v){ return v<=2?'m1':v<=4?'m3':v<=6?'m5':v<=8?'m7':'m9'; }
 
-var rateState = { date:null, mood:5, emotions:[], moreOpen:false, extraScaglione:null };
+var rateState = { date:null, mood:5, emotions:[], noDistraction:false, moreOpen:false, extraScaglione:null, editMode:false };
 
 function _emoGridHtml(list){
   return list.map(function(e){
@@ -1420,33 +1420,60 @@ function toggleEmoMore(){
   document.getElementById('rate-emo-more-btn').textContent = rateState.moreOpen ? '– Nascondi' : '+ Aggiungi emozione';
 }
 
+function _rateLoadInto(ex){
+  rateState.mood = (ex && ex.mood) || 5;
+  rateState.emotions = (ex && ex.emotions) ? ex.emotions.slice() : [];
+  rateState.noDistraction = !!(ex && ex.noDistraction);
+}
 function openRate(){
   rateState.date = state.anchor;
   var ex = _moodCacheGet(rateState.date);
-  rateState.mood = (ex && ex.mood) || 5;
-  rateState.emotions = (ex && ex.emotions) ? ex.emotions.slice() : [];
+  _rateLoadInto(ex);
   rateState.moreOpen = false;
   rateState.extraScaglione = null;
+  rateState.editMode = !ex;   // già votato -> recap; altrimenti form diretto
   var p=rateState.date.split('-'); var d=new Date(+p[0],+p[1]-1,+p[2]);
   document.getElementById('rate-slot').textContent = d.getDate()+' '+MESI[d.getMonth()];
-  document.getElementById('rate-mood').value = rateState.mood;
   document.getElementById('rate-emo-more').classList.add('hidden');
   document.getElementById('rate-emo-more-btn').textContent = '+ Aggiungi emozione';
-  _rateSyncLabels();
-  _renderEmoUI();
+  _renderRateView();
   document.getElementById('rate').classList.remove('hidden');
   apiGet({ action:'getMoodLog', date:rateState.date }).then(function(fresh){
     _moodCacheSet(rateState.date, fresh);
-    // aggiorna solo se il popup è ancora aperto sulla stessa data (evita di
-    // sovrascrivere scelte già fatte dall'utente mentre arrivava la risposta)
-    if(!document.getElementById('rate').classList.contains('hidden') && rateState.date===state.anchor && fresh){
-      rateState.mood=fresh.mood; rateState.emotions=fresh.emotions.slice();
-      document.getElementById('rate-mood').value=rateState.mood;
-      _rateSyncLabels(); _renderEmoUI();
+    // aggiorna solo se il popup è ancora aperto sulla stessa data, e solo se
+    // non si è già in modifica (evita di sovrascrivere scelte in corso)
+    if(!document.getElementById('rate').classList.contains('hidden') && rateState.date===state.anchor && fresh && !rateState.editMode){
+      _rateLoadInto(fresh);
+      _renderRateView();
     }
   }).catch(function(e){ console.warn('getMoodLog bg:',e.message); });
 }
 function closeRate(){ document.getElementById('rate').classList.add('hidden'); }
+function rateEdit(){ rateState.editMode = true; _renderRateView(); }
+// mostra la vista giusta (recap sola-lettura o form) in base a rateState.editMode
+function _renderRateView(){
+  document.getElementById('rate-recap').classList.toggle('hidden', !!rateState.editMode);
+  document.getElementById('rate-form').classList.toggle('hidden', !rateState.editMode);
+  if(rateState.editMode){
+    document.getElementById('rate-mood').value = rateState.mood;
+    document.getElementById('rate-nodist').checked = rateState.noDistraction;
+    _rateSyncLabels();
+    _renderEmoUI();
+  } else {
+    _renderRateRecap();
+  }
+}
+function _renderRateRecap(){
+  document.getElementById('rate-recap-val').textContent = rateState.mood;
+  var face=document.getElementById('rate-recap-face');
+  face.textContent = moodFace(rateState.mood);
+  face.className = 'rate-recap-face '+moodClass(rateState.mood);
+  document.getElementById('rate-recap-nodist').classList.toggle('hidden', !rateState.noDistraction);
+  var list = rateState.emotions.map(function(id){ return EMOTIONS.filter(function(e){ return e.id===id; })[0]; }).filter(Boolean);
+  document.getElementById('rate-recap-emo').innerHTML = list.map(function(e){
+    return '<div class="rate-emo-item"><img src="emo/'+e.file+'" alt="'+e.id+'"><span>'+e.id+'</span></div>';
+  }).join('');
+}
 // aggiorna numero e faccina accanto allo slider mood
 function _rateSyncLabels(){
   var m=+document.getElementById('rate-mood').value;
@@ -1459,7 +1486,8 @@ function _rateSyncLabels(){
 }
 document.getElementById('rate-mood').addEventListener('input', function(){ _rateSyncLabels(); _renderEmoUI(); });
 function rateSave(){
-  var rec={ date:rateState.date, mood:rateState.mood, emotions:rateState.emotions.slice() };
+  rateState.noDistraction = document.getElementById('rate-nodist').checked;
+  var rec={ date:rateState.date, mood:rateState.mood, emotions:rateState.emotions.slice(), noDistraction:rateState.noDistraction };
   _moodCacheSet(rec.date, rec);   // UI + cache subito
   closeRate();
   refreshBookmarkBadge();
