@@ -298,7 +298,7 @@ body{
   background:rgba(20,18,16,.55); padding:18px; animation:riseIn .18s ease; }
 .postit{
   width:100%; max-width:360px; height:70vh; background:var(--postit, var(--hl-pink));
-  border-radius:3px; box-shadow:0 16px 40px rgba(0,0,0,.4); transform:rotate(-1deg);
+  border-radius:3px; box-shadow:0 16px 40px rgba(0,0,0,.4);
   display:flex; flex-direction:column; padding:18px; animation:popIn .26s ease;
 }
 .postit-top{ display:flex; align-items:center; justify-content:flex-end; margin-bottom:6px; }
@@ -323,15 +323,61 @@ body{
 .pi-item .pi-del{ position:absolute; right:8px; top:50%; transform:translateY(-50%); color:var(--red); font-size:18px; opacity:0; transition:opacity .15s; }
 .pi-item.swiping{ transition:transform .15s; }
 
-/* ---- cartelline (tab delle liste), in stile "faldoni" impilati ---- */
-.tasks-tabs{ display:flex; gap:4px; margin:-18px -18px 10px; padding:8px 14px 0; flex-wrap:wrap; }
-.tasks-tab{
-  font-family:'Patrick Hand',cursive; font-weight:700; font-size:13px; color:var(--ink);
-  border:none; border-radius:8px 8px 0 0; padding:7px 12px; cursor:pointer; opacity:.6;
-  box-shadow:0 -1px 3px rgba(0,0,0,.15);
+/* ---- cartelline (tab delle liste): una riga sola, scorrevole se sono tante ---- */
+.tasks-tabs{
+  display:flex; gap:3px; margin:-18px -18px 8px; padding:8px 12px 0;
+  flex-wrap:nowrap; overflow-x:auto; overscroll-behavior-x:contain;
+  scrollbar-width:none;
 }
-.tasks-tab.sel{ opacity:1; box-shadow:0 -2px 6px rgba(0,0,0,.25); }
-.tasks-tab-add{ background:rgba(255,255,255,.5); opacity:.8; font-weight:900; }
+.tasks-tabs::-webkit-scrollbar{ display:none; }
+.tasks-tab{
+  flex:0 1 auto; min-width:0; max-width:92px;
+  font-family:'Patrick Hand',cursive; font-weight:700; font-size:13px; color:var(--ink);
+  border:none; border-radius:9px 9px 0 0; padding:7px 10px; cursor:pointer;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  opacity:.55; transform:translateY(3px); transition:opacity .12s, transform .12s;
+}
+.tasks-tab.sel{ opacity:1; transform:none; box-shadow:0 -2px 6px rgba(0,0,0,.18); }
+.tasks-tab-special{ flex:0 0 auto; background:#fff8c4; font-size:15px; padding:7px 11px; }
+.tasks-tab-add{ flex:0 0 auto; background:rgba(255,255,255,.55); font-weight:900; padding:7px 11px; }
+
+/* bottone che apre il form attività (sostituisce il vecchio campo di testo) */
+.tasks-add-btn{
+  flex-shrink:0; width:100%; font-family:'Patrick Hand',cursive; font-size:16px; cursor:pointer;
+  padding:10px; margin-bottom:10px; border-radius:10px;
+  border:2px dashed rgba(0,0,0,.35); background:rgba(255,255,255,.35); color:var(--ink);
+}
+.tasks-add-btn:active{ transform:translateY(1px); }
+
+/* dettaglio e categoria dentro la riga task */
+.pi-detail{ display:block; font-size:13px; color:var(--ink-soft); margin-top:1px; }
+.pi-cat{ position:relative; display:inline-block; margin-left:6px; font-size:13px; padding:1px 5px; }
+.pi-cat span{ position:relative; z-index:1; }
+.pi-cat::before{ content:""; position:absolute; inset:5% -2%; mix-blend-mode:multiply;
+  transform:rotate(-1.5deg); border-radius:6px; }
+.pi-cat.tag-work::before{   background:var(--hl-blue); }
+.pi-cat.tag-casa::before{   background:var(--hl-orange); }
+.pi-cat.tag-social::before{ background:var(--hl-pink); }
+.pi-cat.tag-health::before{ background:var(--hl-green); }
+.pi-cat.tag-admin::before{  background:var(--hl-grey); }
+.pi-cat.tag-hobby::before{  background:var(--hl-purple); }
+.pi-cat.tag-gym::before{    background:var(--hl-teal); }
+
+/* modal nuova lista: scelta colore */
+.newlist-colors{ display:flex; gap:10px; justify-content:center; margin:4px 0 16px; }
+.newlist-color{ width:30px; height:30px; border-radius:50%; cursor:pointer;
+  border:3px solid transparent; box-shadow:0 1px 3px rgba(0,0,0,.25); }
+.newlist-color.sel{ border-color:var(--ink); }
+
+/* modal attività */
+.tf-detail{ width:100%; min-height:62px; font-family:'Patrick Hand',cursive; font-size:16px; color:var(--ink);
+  background:transparent; border:2px solid #d8d2c0; border-radius:10px; padding:8px; margin-bottom:10px; resize:vertical; }
+.tf-detail:focus{ outline:none; border-color:var(--ink); }
+.tf-remind{ display:flex; gap:8px; align-items:center; justify-content:center;
+  font-family:'Patrick Hand',cursive; font-size:15px; color:var(--ink); cursor:pointer; margin-bottom:14px; }
+.tf-remind input{ width:18px; height:18px; accent-color:var(--ink); }
+.tf-cats-label{ font-family:'Patrick Hand',cursive; font-size:12px; color:var(--ink-soft);
+  text-transform:uppercase; letter-spacing:.5px; text-align:center; margin-bottom:4px; }
 
 /* feedback "max raggiunto" sul note-btn (riuso per eventuali limiti futuri) */
 .note-btn.shake{ animation:nbShake .35s ease; }

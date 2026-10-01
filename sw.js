@@ -4,7 +4,7 @@
 // cache (scelta di progetto: app sempre online; le chiamate al Web App GAS
 // passano sempre dalla rete).
 
-var CACHE = 'questlog-shell-v24';
+var CACHE = 'questlog-shell-v25';
 var SHELL = [
   './',
   './index.html',
@@ -35,7 +35,22 @@ self.addEventListener('fetch', function(e){
   // Le chiamate al backend GAS vanno SEMPRE in rete, mai in cache.
   if (url.indexOf('script.google.com') !== -1) return;
   if (e.request.method !== 'GET') return;
-  // App-shell: cache-first, con fallback rete.
+
+  // Codice dell'app (html/css/js): NETWORK-FIRST. Cache-first qui significava
+  // restare incollati a una versione vecchia anche dopo il deploy, con la UI
+  // che mostrava dati fantasma di build precedenti.
+  if (/\.(html|css|js)(\?|$)/.test(url) || url.endsWith('/')) {
+    e.respondWith(
+      fetch(e.request).then(function(res){
+        var copy = res.clone();
+        caches.open(CACHE).then(function(c){ c.put(e.request, copy); });
+        return res;
+      }).catch(function(){ return caches.match(e.request); })   // offline: ripiega sulla cache
+    );
+    return;
+  }
+
+  // Risorse statiche (icone/immagini/manifest): cache-first, non cambiano mai.
   e.respondWith(
     caches.match(e.request).then(function(hit){ return hit || fetch(e.request); })
   );

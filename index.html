@@ -159,8 +159,37 @@
       <div class="postit-top">
         <button class="postit-close" onclick="closeTasks()">✕</button>
       </div>
-      <input id="tasks-input" class="postit-input" placeholder="Aggiungi… (invio)">
+      <button id="tasks-add-btn" class="tasks-add-btn" onclick="openTaskForm()">+ Aggiungi attività</button>
       <div id="tasks-list" class="postit-list"></div>
+    </div>
+  </div>
+
+  <!-- MODAL NUOVA LISTA (nome + colore, interno all'app) -->
+  <div id="newlist-modal" class="pi-choice hidden">
+    <div class="pi-choice-card">
+      <input id="newlist-name" class="pi-choice-text" placeholder="nome lista…">
+      <div id="newlist-colors" class="newlist-colors"></div>
+      <button class="pi-btn pi-toagenda" onclick="newListConfirm()">Crea</button>
+      <button class="pi-btn pi-cancel" onclick="closeNewList()">Annulla</button>
+    </div>
+  </div>
+
+  <!-- MODAL ATTIVITÀ (titolo, dettaglio, scadenza, reminder, categoria se speciali) -->
+  <div id="taskform-modal" class="pi-choice hidden">
+    <div class="pi-choice-card">
+      <input id="tf-title" class="pi-choice-text" placeholder="titolo…">
+      <textarea id="tf-detail" class="tf-detail" placeholder="dettaglio (opzionale)"></textarea>
+      <div class="pi-choice-due-row">
+        <input id="tf-due" class="pi-choice-due" type="date" title="Scadenza (opzionale)">
+        <span id="tf-time-wrap" class="hidden"><input id="tf-time" class="pi-choice-time" type="time" title="Ora (opzionale)"></span>
+      </div>
+      <label id="tf-remind-row" class="tf-remind hidden"><input id="tf-remind" type="checkbox"> 🔔 Promemoria</label>
+      <div id="tf-cats-row" class="hidden">
+        <div class="tf-cats-label">Categoria</div>
+        <div id="tf-cats" class="ed-cats"></div>
+      </div>
+      <button class="pi-btn pi-toagenda" onclick="taskFormSave()">Salva</button>
+      <button class="pi-btn pi-cancel" onclick="closeTaskForm()">Annulla</button>
     </div>
   </div>
 

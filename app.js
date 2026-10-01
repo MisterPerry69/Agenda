@@ -917,74 +917,142 @@ function entryToPostit(){
 
 // ====== TASK (pannello multi-lista, sostituisce il vecchio post-it unico) ======
 // liste: [{id,name,color}]; task per lista caricate on-demand in tasksByList[listId].
+// Stesso patto del resto dell'app: localStorage è la vista immediata, la rete
+// arriva dopo e corregge. Senza questo il pannello restava su "Carico…" ad
+// ogni apertura, aspettando 1-2s di Apps Script.
 var taskLists = [];
 var tasksByList = {};
 var activeListId = null;
 
+function _loadTasksCache(){
+  try{
+    var c=JSON.parse(localStorage.getItem('ql_tasks')||'null');
+    if(c){ taskLists=c.lists||[]; tasksByList=c.byList||{}; activeListId=c.active||null; }
+  }catch(e){}
+  if(!activeListId && taskLists.length) activeListId=taskLists[0].id;
+}
+function _saveTasksCache(){
+  try{ localStorage.setItem('ql_tasks', JSON.stringify({ lists:taskLists, byList:tasksByList, active:activeListId })); }catch(e){}
+}
+
 function _loadTaskLists(){
   apiGet({ action:'getTaskLists' }).then(function(lists){
     taskLists = lists||[];
-    if(!activeListId && taskLists.length) activeListId = taskLists[0].id;
-    _renderListTabs();
+    if(!_isSpecialList(activeListId) && !taskLists.some(function(l){ return l.id===activeListId; }))
+      activeListId = taskLists.length ? taskLists[0].id : SPECIAL_LIST_ID;
+    _saveTasksCache();
+    if(!document.getElementById('tasks-modal').classList.contains('hidden')){
+      _renderListTabs();
+      if(activeListId) openTaskList(activeListId);
+    }
   }).catch(function(e){ console.warn('taskLists bg:',e.message); });
 }
 
 function openTasks(){
-  if(!activeListId && taskLists.length) activeListId = taskLists[0].id;
-  var modal=document.getElementById('tasks-modal');
-  modal.classList.remove('hidden');
+  if(!activeListId) activeListId = SPECIAL_LIST_ID;   // speciali: c'è sempre
+  document.getElementById('tasks-modal').classList.remove('hidden');
   _renderListTabs();
-  if(activeListId) openTaskList(activeListId);
-  else renderTasksEmpty();
-  setTimeout(function(){ document.getElementById('tasks-input').focus(); }, 80);
+  openTaskList(activeListId);
+  _loadTaskLists();   // riallinea in background
 }
 function closeTasks(){ document.getElementById('tasks-modal').classList.add('hidden'); }
 
 function openTaskList(listId){
   activeListId = listId;
+  _saveTasksCache();
   _renderListTabs();
   document.documentElement.style.setProperty('--postit', _listColor(listId));
-  if(tasksByList[listId]) renderTaskItems();
-  else {
-    _setHTML(document.getElementById('tasks-list'), '<div style="opacity:.45;font-style:italic;padding:10px 2px">Carico…</div>');
-    apiGet({ action:'getTasks', listId:listId }).then(function(items){
-      tasksByList[listId]=items||[];
-      if(activeListId===listId) renderTaskItems();
-    }).catch(function(e){ console.warn('getTasks bg:',e.message); });
-  }
+  renderTaskItems();   // subito dalla cache (anche vuota): mai schermata d'attesa
+  apiGet({ action:'getTasks', listId:listId }).then(function(items){
+    tasksByList[listId]=items||[];
+    _saveTasksCache();
+    if(activeListId===listId) renderTaskItems();
+  }).catch(function(e){ console.warn('getTasks bg:',e.message); });
 }
-function _listColor(listId){ var l=taskLists.filter(function(x){return x.id===listId;})[0]; return (l&&l.color)||POSTIT_COLORS[0]; }
+function _listColor(listId){
+  if(_isSpecialList(listId)) return POSTIT_COLORS[0];
+  var l=taskLists.filter(function(x){return x.id===listId;})[0];
+  return (l&&l.color)||POSTIT_COLORS[0];
+}
 
 function renderTasksEmpty(){
   _setHTML(document.getElementById('tasks-list'), '<div style="opacity:.45;font-style:italic;padding:10px 2px">Crea una lista col tab "+" qui sopra.</div>');
 }
 
 // ---- cartelline (tab delle liste) ----
+// La prima tab (✦) è la lista SPECIALI: esiste sempre, non si elimina, e le
+// sue task portano una categoria dell'agenda. Le altre sono liste libere.
+var SPECIAL_LIST_ID = '__special__';
+function _isSpecialList(id){ return id===SPECIAL_LIST_ID; }
+
 function _renderListTabs(){
   var wrap=document.getElementById('tasks-tabs'); if(!wrap) return;
-  var html = taskLists.map(function(l){
+  var selSpecial = _isSpecialList(activeListId) ? ' sel' : '';
+  var html = '<button type="button" class="tasks-tab tasks-tab-special'+selSpecial+'" onclick="openTaskList(\''+SPECIAL_LIST_ID+'\')" title="Speciali">✦</button>';
+  html += taskLists.map(function(l){
     var sel = l.id===activeListId ? ' sel' : '';
     return '<button type="button" class="tasks-tab'+sel+'" style="background:'+l.color+'" onclick="openTaskList(\''+l.id+'\')"'
       + (sel?' oncontextmenu="return _taskListLongPress(\''+l.id+'\')"':'') + '>'+_esc(l.name)+'</button>';
-  }).join('') + '<button type="button" class="tasks-tab tasks-tab-add" onclick="promptNewTaskList()">+</button>';
+  }).join('');
+  html += '<button type="button" class="tasks-tab tasks-tab-add" onclick="openNewList()">+</button>';
   wrap.innerHTML = html;
-  // long-press (touch) sulla cartellina attiva per eliminarla
+  // long-press (touch) sulla cartellina attiva per eliminarla (mai le speciali)
   Array.prototype.forEach.call(wrap.querySelectorAll('.tasks-tab.sel'), function(el){
+    if(el.classList.contains('tasks-tab-special')) return;
     var timer=null;
     el.addEventListener('touchstart', function(){ timer=setTimeout(function(){ confirmDeleteTaskList(activeListId); }, 550); }, {passive:true});
     el.addEventListener('touchend', function(){ clearTimeout(timer); }, {passive:true});
     el.addEventListener('touchmove', function(){ clearTimeout(timer); }, {passive:true});
   });
+  // la tab attiva resta sempre a vista anche con molte liste
+  var cur=wrap.querySelector('.tasks-tab.sel');
+  if(cur && cur.scrollIntoView) cur.scrollIntoView({block:'nearest', inline:'nearest'});
 }
-function _taskListLongPress(id){ confirmDeleteTaskList(id); return false; }   // right-click desktop
+function _taskListLongPress(id){ if(!_isSpecialList(id)) confirmDeleteTaskList(id); return false; }   // right-click desktop
 
-function promptNewTaskList(){
-  var name = prompt('Nome della nuova lista:'); if(!name || !name.trim()) return;
-  var color = POSTIT_COLORS[taskLists.length % POSTIT_COLORS.length];
-  apiPost({ action:'createTaskList', name:name.trim(), color:color }).then(function(list){
-    taskLists.push(list); tasksByList[list.id]=[];
-    openTaskList(list.id);
-  }).catch(function(e){ alert('Errore creazione lista: '+e.message); });
+// ---- modal nuova lista (interno, niente prompt di sistema) ----
+var _newListColor = POSTIT_COLORS[0];
+function openNewList(){
+  _newListColor = POSTIT_COLORS[taskLists.length % POSTIT_COLORS.length];
+  document.getElementById('newlist-name').value='';
+  _renderNewListColors();
+  document.getElementById('newlist-modal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('newlist-name').focus(); }, 80);
+}
+function closeNewList(){ document.getElementById('newlist-modal').classList.add('hidden'); }
+function _renderNewListColors(){
+  document.getElementById('newlist-colors').innerHTML = POSTIT_COLORS.map(function(c){
+    return '<button type="button" class="newlist-color'+(c===_newListColor?' sel':'')+'" style="background:'+c+'" onclick="_pickNewListColor(\''+c+'\')"></button>';
+  }).join('');
+}
+function _pickNewListColor(c){ _newListColor=c; _renderNewListColors(); }
+function newListConfirm(){
+  var name=document.getElementById('newlist-name').value.trim();
+  if(!name) return;
+  closeNewList();
+  createTaskList(name, _newListColor);
+}
+
+function createTaskList(name, color){
+  name=String(name||'').trim(); if(!name) return;
+  // tab subito visibile e selezionata: la rete conferma dopo
+  var tmpId='tmp_'+Date.now().toString(36);
+  taskLists.push({ id:tmpId, name:name, color:color });
+  tasksByList[tmpId]=[];
+  activeListId=tmpId;
+  _saveTasksCache();
+  _renderListTabs();
+  renderTaskItems();
+  document.documentElement.style.setProperty('--postit', color);
+  apiPost({ action:'createTaskList', name:name, color:color }).then(function(list){
+    if(!list) return;
+    var i=taskLists.findIndex(function(x){ return x.id===tmpId; });
+    if(i>=0) taskLists[i]=list;
+    tasksByList[list.id]=tasksByList[tmpId]||[]; delete tasksByList[tmpId];
+    if(activeListId===tmpId) activeListId=list.id;
+    _saveTasksCache();
+    _renderListTabs();
+  }).catch(function(e){ console.warn('create list bg:',e.message); });
 }
 function confirmDeleteTaskList(id){
   var l=taskLists.filter(function(x){return x.id===id;})[0]; if(!l) return;
@@ -1009,30 +1077,89 @@ function _tasksOrdered(listId){
 function renderTaskItems(){
   var list=document.getElementById('tasks-list');
   var items=tasksByList[activeListId]||[];
-  if(!items.length){
-    _setHTML(list,'<div style="opacity:.45;font-style:italic;padding:10px 2px">Niente ancora. Scrivi sopra e premi invio.</div>'); return;
-  }
+  if(!items.length){ _setHTML(list,''); return; }
   var html = _tasksOrdered(activeListId).map(function(it){
     var due = it.due ? '<span class="pi-due">📅 '+it.due.slice(8,10)+'/'+it.due.slice(5,7)+(it.time?' '+it.time:'')+'</span>' : '';
+    var cat = it.category ? _catMini(it.category) : '';
+    var det = it.detail ? '<span class="pi-detail">'+_esc(it.detail)+'</span>' : '';
     return '<div class="pi-item'+(it.done?' done':'')+'" data-id="'+it.id+'">'
       +'<span class="pi-check" data-act="toggle"></span>'
-      +'<span class="pi-text" data-act="tap">'+_esc(it.text)+due+'</span>'
+      +'<span class="pi-text" data-act="tap">'+_esc(it.text)+cat+due+det+'</span>'
       +'<span class="pi-del">🗑</span></div>';
   }).join('');
   if(!_setHTML(list, html)) return;   // identico: niente flash
   Array.prototype.forEach.call(list.querySelectorAll('.pi-item'), _wireTaskItem);
 }
-function addTaskItem(listId, text){
-  text=text.trim(); if(!text) return;
-  apiPost({ action:'setTask', rec:{ listId:listId, text:text } }).then(function(saved){
-    if(!tasksByList[listId]) tasksByList[listId]=[];
-    tasksByList[listId].unshift(saved);
-    if(activeListId===listId) renderTaskItems();
-  }).catch(function(e){ alert('Errore creazione task: '+e.message); });
+// pastiglia categoria compatta, per le task della lista speciali
+function _catMini(raw){
+  var d=_catDef(raw); if(!d) return '';
+  return '<span class="pi-cat tag-'+d.key+'"><span>'+d.emoji+'</span></span>';
 }
-document.getElementById('tasks-input').addEventListener('keydown', function(e){
-  if(e.key==='Enter' && activeListId){ e.preventDefault(); addTaskItem(activeListId, this.value); this.value=''; }
+
+function addTaskItem(listId, rec){
+  if(typeof rec==='string') rec={ text:rec };
+  var text=String(rec.text||'').trim(); if(!text) return;
+  // riga subito a schermo con id provvisorio; il server ne assegna uno vero
+  var tmpId='tmp_'+Date.now().toString(36);
+  var local={ id:tmpId, listId:listId, text:text, done:false,
+    due:rec.due||'', time:rec.time||'', detail:rec.detail||'', category:rec.category||'' };
+  if(!tasksByList[listId]) tasksByList[listId]=[];
+  tasksByList[listId].unshift(local);
+  _saveTasksCache();
+  if(activeListId===listId) renderTaskItems();
+  if(local.due){ delete taskDueCache[local.due]; render(); }
+  apiPost({ action:'setTask', rec:{ listId:listId, text:text, due:local.due, time:local.time,
+      detail:local.detail, category:local.category } }).then(function(saved){
+    var arr=tasksByList[listId]||[];
+    var i=arr.findIndex(function(x){ return x.id===tmpId; });
+    if(i>=0 && saved) arr[i]=saved;
+    _saveTasksCache();
+    if(activeListId===listId) renderTaskItems();
+  }).catch(function(e){ console.warn('add task bg:',e.message); });
+}
+
+// ---- modal "aggiungi attività" ----
+var _tfCat='work';
+function openTaskForm(){
+  if(!activeListId){ openNewList(); return; }
+  document.getElementById('tf-title').value='';
+  document.getElementById('tf-detail').value='';
+  document.getElementById('tf-due').value='';
+  document.getElementById('tf-time').value='';
+  document.getElementById('tf-time-wrap').classList.add('hidden');
+  document.getElementById('tf-remind').checked=false;
+  document.getElementById('tf-remind-row').classList.add('hidden');
+  var special=_isSpecialList(activeListId);
+  document.getElementById('tf-cats-row').classList.toggle('hidden', !special);
+  if(special){ _tfCat='work'; _renderTfCats(); }
+  document.getElementById('taskform-modal').classList.remove('hidden');
+  setTimeout(function(){ document.getElementById('tf-title').focus(); }, 80);
+}
+function closeTaskForm(){ document.getElementById('taskform-modal').classList.add('hidden'); }
+function _renderTfCats(){
+  document.getElementById('tf-cats').innerHTML = CATS.map(function(c){
+    return '<button type="button" class="ed-cat tag-'+c.key+(c.key===_tfCat?' sel':'')+'" onclick="_pickTfCat(\''+c.key+'\')"><span>'+c.emoji+'</span></button>';
+  }).join('');
+}
+function _pickTfCat(k){ _tfCat=k; _renderTfCats(); }
+// l'ora e il promemoria hanno senso solo con una scadenza
+document.getElementById('tf-due').addEventListener('change', function(){
+  var has=!!this.value;
+  document.getElementById('tf-time-wrap').classList.toggle('hidden', !has);
+  document.getElementById('tf-remind-row').classList.toggle('hidden', !has);
+  if(!has){ document.getElementById('tf-time').value=''; document.getElementById('tf-remind').checked=false; }
 });
+function taskFormSave(){
+  var title=document.getElementById('tf-title').value.trim();
+  if(!title) return;
+  var due=document.getElementById('tf-due').value;
+  var rec={ text:title, detail:document.getElementById('tf-detail').value.trim(),
+    due:due, time:due?document.getElementById('tf-time').value:'',
+    remind:due?document.getElementById('tf-remind').checked:false };
+  if(_isSpecialList(activeListId)) rec.category=_tfCat;
+  closeTaskForm();
+  addTaskItem(activeListId, rec);
+}
 
 function _taskFind(id){ return (tasksByList[activeListId]||[]).filter(function(i){return i.id===id;})[0]; }
 function _taskReplace(listId, saved){
@@ -1085,7 +1212,7 @@ function taskDelete(id){
 }
 
 // ---- modal scelta su item (testo + scadenza opzionale data/ora) ----
-var taskChoiceId=null, taskChoiceListId=null;
+var taskChoiceId=null, taskChoiceListId=null, taskChoiceOrig=null;
 function taskOpenChoice(id){
   var it=_taskFind(id); if(!it) return;
   taskChoiceId=id; taskChoiceListId=activeListId;
@@ -1100,6 +1227,7 @@ function piOpenChoiceById(id){
   }).catch(function(e){ console.warn('piOpenChoiceById bg:',e.message); });
 }
 function _fillChoiceModal(it){
+  taskChoiceOrig=it;   // dettaglio/categoria/promemoria non sono in questo modal: vanno riproposti al salvataggio
   document.getElementById('pi-choice-text').value=it.text;
   document.getElementById('pi-choice-due').value=it.due||'';
   document.getElementById('pi-choice-time').value=it.time||'';
@@ -1115,7 +1243,9 @@ function _taskSyncFields(){
   var text=document.getElementById('pi-choice-text').value.trim();
   var due=document.getElementById('pi-choice-due').value;
   var time=due ? document.getElementById('pi-choice-time').value : '';
-  return apiPost({ action:'setTask', rec:{ id:taskChoiceId, listId:taskChoiceListId, text:text, due:due, time:time } });
+  var o=taskChoiceOrig||{};
+  return apiPost({ action:'setTask', rec:{ id:taskChoiceId, listId:taskChoiceListId, text:text, due:due, time:time,
+    detail:o.detail||'', category:o.category||'', remind:due ? !!o.remind : false } });
 }
 function piCloseChoice(){
   _taskSyncFields().then(function(saved){
