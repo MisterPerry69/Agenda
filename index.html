@@ -159,27 +159,27 @@
       <div class="postit-top">
         <button class="postit-close" onclick="closeTasks()">✕</button>
       </div>
-      <div id="tasks-list" class="postit-list"></div>
+      <button id="tasks-add-btn" class="tasks-add-btn" onclick="tnOpen()">+ Aggiungi attività</button>
 
-      <!-- inserimento INLINE (come Google Tasks): il campo compare nella lista,
-           i dettagli si espandono qui sotto senza aprire popup -->
+      <!-- inserimento INLINE (come Google Tasks): in ALTO, così la tastiera che
+           si apre non sposta nulla di quello che stai scrivendo -->
       <div id="tasks-new" class="tasks-new hidden">
         <input id="tn-title" class="tasks-new-title" placeholder="Nuova attività">
         <textarea id="tn-detail" class="tasks-new-detail hidden" placeholder="dettaglio"></textarea>
         <div id="tn-due-row" class="tasks-new-due hidden">
           <input id="tn-due" type="date">
           <input id="tn-time" type="time" class="hidden">
-          <label id="tn-remind-row" class="tasks-new-remind hidden"><input id="tn-remind" type="checkbox"> 🔔</label>
+          <label id="tn-remind-row" class="tasks-new-remind hidden"><input id="tn-remind" type="checkbox" checked> 🔔</label>
         </div>
         <div id="tn-cats" class="tasks-new-cats hidden"></div>
         <div class="tasks-new-bar">
           <button type="button" class="tn-icon" onclick="tnToggleDetail()" title="Dettaglio">☰</button>
-          <button type="button" class="tn-icon" onclick="tnToggleDue()" title="Aggiungi scadenza">📅</button>
+          <button type="button" class="tn-icon" onclick="tnToggleDue()" title="Aggiungi scadenza">🎯</button>
           <button type="button" class="tn-save" onclick="tnSave()">Salva</button>
         </div>
       </div>
 
-      <button id="tasks-add-btn" class="tasks-add-btn" onclick="tnOpen()">+ Aggiungi attività</button>
+      <div id="tasks-list" class="postit-list"></div>
     </div>
   </div>
 

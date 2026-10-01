@@ -353,8 +353,8 @@ body{
 }
 .tasks-add-btn:active{ opacity:1; }
 
-/* ---- inserimento inline (stile Google Tasks) ---- */
-.tasks-new{ flex-shrink:0; border-top:1px solid rgba(0,0,0,.18); padding-top:10px; margin-top:4px; }
+/* ---- inserimento inline (stile Google Tasks), in alto nel foglio ---- */
+.tasks-new{ flex-shrink:0; border-bottom:1px solid rgba(0,0,0,.18); padding-bottom:10px; margin-bottom:6px; }
 .tasks-new-title{
   width:100%; border:none; background:transparent; outline:none;
   font-family:'Patrick Hand',cursive; font-size:19px; color:var(--ink); padding:4px 2px;
@@ -373,6 +373,11 @@ body{
 .tasks-new-remind{ display:flex; align-items:center; gap:4px; font-size:15px; cursor:pointer; }
 .tasks-new-remind input{ width:17px; height:17px; accent-color:var(--ink); }
 .tasks-new-cats{ display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 2px; }
+/* scelta della lista di destinazione per una task speciale */
+.tn-cat{ font-family:'Patrick Hand',cursive; font-size:14px; color:var(--ink); cursor:pointer;
+  border:2px solid transparent; border-radius:8px; padding:4px 10px; opacity:.6; }
+.tn-cat.sel{ opacity:1; border-color:var(--ink); }
+.tn-nocats{ font-family:'Patrick Hand',cursive; font-size:14px; color:var(--ink); opacity:.6; }
 .tasks-new-bar{ display:flex; align-items:center; gap:10px; margin-top:6px; }
 .tn-icon{ font-size:17px; line-height:1; border:none; background:transparent; cursor:pointer; padding:4px 2px; opacity:.7; }
 .tn-icon:active{ opacity:1; }
@@ -381,17 +386,9 @@ body{
 
 /* dettaglio e categoria dentro la riga task */
 .pi-detail{ display:block; font-size:13px; color:var(--ink-soft); margin-top:1px; }
-.pi-cat{ position:relative; display:inline-block; margin-left:6px; font-size:13px; padding:1px 5px; }
-.pi-cat span{ position:relative; z-index:1; }
-.pi-cat::before{ content:""; position:absolute; inset:5% -2%; mix-blend-mode:multiply;
-  transform:rotate(-1.5deg); border-radius:6px; }
-.pi-cat.tag-work::before{   background:var(--hl-blue); }
-.pi-cat.tag-casa::before{   background:var(--hl-orange); }
-.pi-cat.tag-social::before{ background:var(--hl-pink); }
-.pi-cat.tag-health::before{ background:var(--hl-green); }
-.pi-cat.tag-admin::before{  background:var(--hl-grey); }
-.pi-cat.tag-hobby::before{  background:var(--hl-purple); }
-.pi-cat.tag-gym::before{    background:var(--hl-teal); }
+/* pastiglia con la lista di appartenenza (solo nelle speciali) */
+.pi-cat{ display:inline-block; margin-left:7px; font-size:12px; padding:1px 7px;
+  border-radius:7px; vertical-align:middle; }
 
 /* modal nuova lista: scelta colore */
 .newlist-colors{ display:flex; gap:10px; justify-content:center; margin:4px 0 16px; }

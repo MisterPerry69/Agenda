@@ -113,6 +113,7 @@ function boot(){
   _loadCache();
   document.getElementById('app').classList.remove('hidden');
   render(); // subito dalla cache (anche vuota)
+  _loadTasksCache();   // liste e task dalla cache locale: pannello pronto subito
   _loadTaskLists();
   // precarica un ampio intervallo (anno corrente ± qualche mese) in background
   var y = new Date().getFullYear();
@@ -927,9 +928,9 @@ var activeListId = null;
 function _loadTasksCache(){
   try{
     var c=JSON.parse(localStorage.getItem('ql_tasks')||'null');
-    if(c){ taskLists=c.lists||[]; tasksByList=c.byList||{}; activeListId=c.active||null; }
+    if(c){ taskLists=c.lists||[]; tasksByList=c.byList||{}; }
   }catch(e){}
-  if(!activeListId && taskLists.length) activeListId=taskLists[0].id;
+  activeListId=SPECIAL_LIST_ID;   // si parte sempre dalle speciali
 }
 function _saveTasksCache(){
   try{ localStorage.setItem('ql_tasks', JSON.stringify({ lists:taskLists, byList:tasksByList, active:activeListId })); }catch(e){}
@@ -938,8 +939,9 @@ function _saveTasksCache(){
 function _loadTaskLists(){
   apiGet({ action:'getTaskLists' }).then(function(lists){
     taskLists = lists||[];
+    // se la lista aperta non esiste più (eliminata altrove) si torna alle speciali
     if(!_isSpecialList(activeListId) && !taskLists.some(function(l){ return l.id===activeListId; }))
-      activeListId = taskLists.length ? taskLists[0].id : SPECIAL_LIST_ID;
+      activeListId = SPECIAL_LIST_ID;
     _saveTasksCache();
     if(!document.getElementById('tasks-modal').classList.contains('hidden')){
       _renderListTabs();
@@ -964,7 +966,10 @@ function openTaskList(listId){
   document.documentElement.style.setProperty('--postit', _listColor(listId));
   renderTaskItems();   // subito dalla cache (anche vuota): mai schermata d'attesa
   apiGet({ action:'getTasks', listId:listId }).then(function(items){
-    tasksByList[listId]=items||[];
+    // conserva le righe appena create e non ancora confermate dal server,
+    // altrimenti una task scritta un attimo prima sparirebbe dalla lista
+    var pending=(tasksByList[listId]||[]).filter(function(t){ return t.id.indexOf('tmp_')===0; });
+    tasksByList[listId]=pending.concat(items||[]);
     _saveTasksCache();
     if(activeListId===listId) renderTaskItems();
   }).catch(function(e){ console.warn('getTasks bg:',e.message); });
@@ -1091,10 +1096,11 @@ function renderTaskItems(){
   if(!_setHTML(list, html)) return;   // identico: niente flash
   Array.prototype.forEach.call(list.querySelectorAll('.pi-item'), _wireTaskItem);
 }
-// pastiglia categoria compatta, per le task della lista speciali
-function _catMini(raw){
-  var d=_catDef(raw); if(!d) return '';
-  return '<span class="pi-cat tag-'+d.key+'"><span>'+d.emoji+'</span></span>';
+// pastiglia della lista di appartenenza, per le task della lista speciali
+function _catMini(listId){
+  var l=taskLists.filter(function(x){return x.id===listId;})[0];
+  if(!l) return '';
+  return '<span class="pi-cat" style="background:'+l.color+'">'+_esc(l.name)+'</span>';
 }
 
 function addTaskItem(listId, rec){
@@ -1128,12 +1134,12 @@ function tnOpen(){
   document.getElementById('tn-due').value='';
   document.getElementById('tn-time').value='';
   document.getElementById('tn-time').classList.add('hidden');
-  document.getElementById('tn-remind').checked=false;
+  document.getElementById('tn-remind').checked=true;   // promemoria di default
   document.getElementById('tn-remind-row').classList.add('hidden');
   document.getElementById('tn-due-row').classList.add('hidden');
   var special=_isSpecialList(activeListId);
   document.getElementById('tn-cats').classList.toggle('hidden', !special);
-  if(special){ _tnCat='work'; _renderTnCats(); }
+  if(special){ _tnCat=taskLists.length?taskLists[0].id:''; _renderTnCats(); }
   document.getElementById('tasks-new').classList.remove('hidden');
   document.getElementById('tasks-add-btn').classList.add('hidden');
   setTimeout(function(){ document.getElementById('tn-title').focus(); }, 60);
@@ -1153,9 +1159,14 @@ function tnToggleDue(){
   row.classList.toggle('hidden', !show);
   if(!show){ document.getElementById('tn-due').value=''; document.getElementById('tn-time').value=''; }
 }
+// le "categorie" di una task speciale sono le LISTE esistenti (le tab), non le
+// categorie del calendario: la speciali è un contenitore trasversale che punta
+// a una lista vera.
 function _renderTnCats(){
-  document.getElementById('tn-cats').innerHTML = CATS.map(function(c){
-    return '<button type="button" class="ed-cat tag-'+c.key+(c.key===_tnCat?' sel':'')+'" onclick="_pickTnCat(\''+c.key+'\')"><span>'+c.emoji+'</span></button>';
+  var el=document.getElementById('tn-cats');
+  if(!taskLists.length){ el.innerHTML='<span class="tn-nocats">crea prima una lista col "+"</span>'; return; }
+  el.innerHTML = taskLists.map(function(l){
+    return '<button type="button" class="tn-cat'+(l.id===_tnCat?' sel':'')+'" style="background:'+l.color+'" onclick="_pickTnCat(\''+l.id+'\')">'+_esc(l.name)+'</button>';
   }).join('');
 }
 function _pickTnCat(k){ _tnCat=k; _renderTnCats(); }
