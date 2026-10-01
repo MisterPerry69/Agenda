@@ -16,18 +16,10 @@
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <!-- COVER PLACEHOLDER: la grafica definitiva la realizza l'utente.
-       Durante la cover si fa il precaricamento dati (fruizione poi immediata). -->
-  <div id="cover" class="cover" onclick="openAgenda()">
-    <div class="cover-hint">tap per aprire</div>
-  </div>
-
   <div id="app" class="app hidden">
-    <!-- bookmark e post-it stanno FUORI da .page così possono sbordare dai bordi -->
+    <!-- bookmark e task stanno FUORI da .page così possono sbordare dai bordi -->
     <button id="bookmark" class="bookmark" onclick="openTracking()" title="Voti del giorno"></button>
-    <button id="note-btn" class="note-btn" onclick="openPostit()"></button>
-    <!-- linguette delle liste usa-e-getta, impilate sopra al post-it main, cliccabili -->
-    <div id="temp-tabs" class="temp-tabs"></div>
+    <button id="note-btn" class="note-btn" onclick="openTasks()" title="Task"></button>
 
     <div class="page" id="page">
       <header class="ag-head">
@@ -160,27 +152,26 @@
     </div>
   </div>
 
-  <!-- MODAL POST-IT (lista di cose da fare generiche) -->
-  <div id="postit-modal" class="postit-modal hidden">
+  <!-- MODAL TASK (pannello multi-lista, sostituisce il vecchio post-it unico) -->
+  <div id="tasks-modal" class="postit-modal hidden">
     <div class="postit" id="postit">
-      <!-- due forellini in alto: visibili solo sulle liste usa-e-getta (foglio strappato dal blocco) -->
-      <span class="punch-hole punch-l"></span>
-      <span class="punch-hole punch-r"></span>
+      <div id="tasks-tabs" class="tasks-tabs"></div>
       <div class="postit-top">
-        <div class="postit-colors" id="postit-colors"></div>
-        <button class="postit-close" onclick="closePostit()">✕</button>
+        <button class="postit-close" onclick="closeTasks()">✕</button>
       </div>
-      <input id="postit-input" class="postit-input" placeholder="Aggiungi… (invio)">
-      <div id="postit-list" class="postit-list"></div>
-      <!-- fronte di fiamma usato dall'animazione "burn" quando la lista si esaurisce -->
-      <span class="burn-edge"></span>
+      <input id="tasks-input" class="postit-input" placeholder="Aggiungi… (invio)">
+      <div id="tasks-list" class="postit-list"></div>
     </div>
   </div>
 
-  <!-- MODAL scelta su un item del post-it -->
+  <!-- MODAL scelta su una task (testo + scadenza opzionale data/ora) -->
   <div id="pi-choice" class="pi-choice hidden">
     <div class="pi-choice-card">
       <input id="pi-choice-text" class="pi-choice-text" placeholder="testo…">
+      <div class="pi-choice-due-row">
+        <input id="pi-choice-due" class="pi-choice-due" type="date" title="Scadenza (opzionale)">
+        <span class="hidden"><input id="pi-choice-time" class="pi-choice-time" type="time" title="Ora (opzionale)"></span>
+      </div>
       <button class="pi-btn pi-done" onclick="piMarkDone()">✓ Segna come fatta</button>
       <button class="pi-btn pi-toagenda" onclick="piToAgenda()">📅 Mettila in agenda oggi</button>
       <button class="pi-btn pi-cancel" onclick="piCloseChoice()">Annulla</button>

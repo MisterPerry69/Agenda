@@ -108,15 +108,12 @@ function apiPost(body){
 function _todayISO(){ var d=new Date(); return _fmt(d); }
 function _fmt(d){ var m=('0'+(d.getMonth()+1)).slice(-2),dd=('0'+d.getDate()).slice(-2); return d.getFullYear()+'-'+m+'-'+dd; }
 
-// ====== AVVIO: precarica dietro la cover, poi tutto è istantaneo ======
-function openAgenda(){
-  document.getElementById('cover').classList.add('hidden');
-  document.getElementById('app').classList.remove('hidden');
-  render(); // subito dalla cache (anche vuota)
-}
+// ====== AVVIO: niente più cover, l'app è visibile subito (dalla cache, anche vuota) ======
 function boot(){
   _loadCache();
-  _loadPostit();
+  document.getElementById('app').classList.remove('hidden');
+  render(); // subito dalla cache (anche vuota)
+  _loadTaskLists();
   // precarica un ampio intervallo (anno corrente ± qualche mese) in background
   var y = new Date().getFullYear();
   syncRange((y-1)+'-12-01', (y+1)+'-01-31');
@@ -367,6 +364,20 @@ function _esc(s){ return String(s).replace(/[&<>]/g,function(c){return {'&':'&am
 // Ritorna true se ha effettivamente riscritto (così il chiamante ricabla gli handler).
 function _setHTML(el, html){ if(el.innerHTML===html){ return false; } el.innerHTML=html; return true; }
 
+// ====== TASK CON SCADENZA (mostrate nella vista Giorno, stile todo) ======
+// cache minimale per data: evita di riscaricare ad ogni render dello stesso giorno.
+var taskDueCache = {};
+var _taskDueLoading = {};   // date -> true mentre la fetch è in corso (evita richieste duplicate)
+function _ensureTasksLoaded(date){
+  if(_taskDueLoading[date]) return;
+  _taskDueLoading[date] = true;
+  apiGet({ action:'getTasksWithDueRange', from:date, to:date }).then(function(list){
+    delete _taskDueLoading[date];
+    taskDueCache[date] = list||[];
+    if(state.view==='day' && state.anchor===date) render();
+  }).catch(function(e){ delete _taskDueLoading[date]; console.warn('tasks day bg:',e.message); });
+}
+
 // ====== RENDER ======
 function render(){
   document.getElementById('ag-title').innerHTML = _titleFor();
@@ -381,17 +392,33 @@ function render(){
 function renderDay(rows){
   var body=document.getElementById('ag-body');
   body.ondblclick=function(ev){ if(!ev.target.closest('.ag-line')) openEditor(); };
-  if(!rows.length){ _setHTML(body,'<div class="ag-empty">Niente per oggi.<br>Doppio tap per aggiungere.</div>'); return; }
-  var html = rows.map(function(e){
+  var tasksToday = taskDueCache[state.anchor];
+  if(tasksToday===undefined) _ensureTasksLoaded(state.anchor);   // trigger async, si ridisegna da sola
+  var taskRows = (tasksToday||[]).map(function(t){
+    return { __isTask:true, id:t.id, date:t.due, time:t.time, title:t.text, done:t.done, category:'' };
+  });
+  var allRows = rows.concat(taskRows).sort(function(a,b){ return _sortKey(a)<_sortKey(b)?-1:1; });
+  if(!allRows.length){ _setHTML(body,'<div class="ag-empty">Niente per oggi.<br>Doppio tap per aggiungere.</div>'); return; }
+  var html = allRows.map(function(e){
+    if(e.__isTask){
+      var tlbl = e.time ? e.time : 'task';
+      var timeColT = '<span class="ag-time'+(e.time?'':' ag-todo')+'" data-act="taskedit">'+tlbl+'</span>';
+      return '<div class="ag-line'+(e.done?' done':'')+' is-todo" data-id="'+e.id+'" data-task="1">'
+        +'<span class="ag-check'+(e.done?' done':'')+'" data-act="taskcheck"></span>'
+        +timeColT
+        +'<span class="ag-txt" data-act="taskedit">'+_esc(e.title)+'</span>'
+        +'<span class="ag-tag tag-unknown" data-act="taskedit"><span>📋 TASK</span></span>'
+        +'</div>';
+    }
     var pin=e.onGoogle?'<span class="ag-pin">📌</span>':'';
     var todo=_isTodoEntry(e);
     var lbl=_dayTimeLabel(e, state.anchor);
     var timeCol = todo ? '<span class="ag-time ag-todo" data-act="edit">todo</span>'
                        : '<span class="ag-time" data-act="edit">'+lbl+'</span>';
     var isBirthday = _catKey(e.category)==='birthday';
-    var checkSpan = isBirthday
-      ? '<span class="ag-check ag-check-cake">🎂</span>'
-      : '<span class="ag-check'+(e.done?' done':'')+'" data-act="check"></span>';
+    var checkSpan = isBirthday ? '<span class="ag-check ag-check-cake">🎂</span>'
+      : todo ? '<span class="ag-check'+(e.done?' done':'')+'" data-act="check"></span>'
+      : '<span class="ag-check ag-check-none"></span>';   // impegni con orario fisso: niente spunta (placeholder per il grid)
     return '<div class="ag-line'+(e.done?' done':'')+(todo?' is-todo':'')+'" data-id="'+e.id+'">'
       +checkSpan
       +timeCol
@@ -402,8 +429,13 @@ function renderDay(rows){
   if(!_setHTML(body, html)) return;   // identico: niente flash, handler già a posto
   Array.prototype.forEach.call(body.querySelectorAll('.ag-line'), function(line){
     var id=line.getAttribute('data-id');
+    var isTask=line.getAttribute('data-task')==='1';
     line.addEventListener('click', function(ev){
       var act=(ev.target.getAttribute('data-act'))||(ev.target.parentElement&&ev.target.parentElement.getAttribute('data-act'));
+      if(isTask){
+        if(act==='taskcheck') toggleTaskDoneFromAgenda(id); else if(act==='taskedit') piOpenChoiceById(id);
+        return;
+      }
       if(act==='check') toggleDone(id); else if(act==='edit') openEditor(id);
     });
   });
@@ -813,14 +845,13 @@ function saveEntry(){
     var tmpId='tmp_'+Date.now()+Math.random().toString(36).slice(2,6);
     entry.id=tmpId; entry.eventId='';
     _markPending(tmpId); _upsert(entry); render(); closeEditor();             // UI subito
-    // se l'evento nasce da un item del post-it: ora che è salvato, l'item sparisce
-    // dalla lista d'origine (main o una temp)
-    if(state.fromPostitId){
-      var src = state.fromPostitList && state.fromPostitList!=='main'
-        ? tempLists.filter(function(l){return l.id===state.fromPostitList;})[0] : postit;
-      if(src){ src.items=src.items.filter(function(i){return i.id!==state.fromPostitId;});
-        if(src===postit){ _savePostitLocal(); _pushNote(); } else { _saveTempLocal(); _renderTabs(); } }
-      state.fromPostitId=null; state.fromPostitList=null;
+    // se l'evento nasce da una task: ora che è salvato, la task sparisce dalla sua lista
+    if(state.fromTaskId){
+      var fid=state.fromTaskId, flist=state.fromTaskListId;
+      if(tasksByList[flist]) tasksByList[flist]=tasksByList[flist].filter(function(i){return i.id!==fid;});
+      if(activeListId===flist) renderTaskItems();
+      apiPost({ action:'deleteTask', id:fid }).catch(function(e){ console.warn('delete task bg:',e.message); });
+      state.fromTaskId=null; state.fromTaskListId=null;
     }
     var toSend=Object.assign({},entry); delete toSend.id;
     apiPost({ action:'addEntry', entry:toSend })
@@ -871,149 +902,153 @@ function deleteCurrent(){
     .then(function(){ _removeLocal(id); })                                    // confermato: via davvero
     .catch(function(err){ console.warn('del bg:',err.message); });           // resta pending → riprovabile
 }
-// sposta un evento dell'agenda nel post-it (diventa una cosa-da-fare generica) e lo rimuove dall'agenda
+// sposta un evento dell'agenda nella lista Task di default (prima disponibile) e lo rimuove dall'agenda
 function entryToPostit(){
   if(!state.editing) return;
   var e=state.editing;
-  postit.items.unshift({ id:'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), text:e.title, done:false });
-  _savePostitLocal(); _pushNote();
+  var listId = (taskLists[0]&&taskLists[0].id);
+  if(!listId){ alert('Crea prima una lista nel pannello Task.'); return; }
+  addTaskItem(listId, e.title);
   // rimuovi l'evento dall'agenda (e da Calendar se sincronizzato), come la delete
   var id=e.id; var c=cache.entries.find(function(x){ return x.id===id; });
   if(c){ c._deleted=true; } _markPending(id); _saveCache(); render(); closeEditor();
   apiPost({ action:'deleteEntry', id:id }).then(function(){ _removeLocal(id); }).catch(function(err){ console.warn('toPostit del bg:',err.message); });
 }
 
-// ====== POST-IT (lista di cose da fare generiche) ======
-// modello main (sincronizzato col backend): { color, items:[ {id, text, done} ] }
-var postit = { color:POSTIT_COLORS[0], items:[] };
-// liste usa-e-getta SOLO LOCALI (max 2): [{ id, items:[{id,text,done}] }].
-// Nate via swipe a destra dal post-it main; si "bruciano" quando l'ultimo item è spuntato.
-var MAX_TEMP = 2;
-var tempLists = [];
-// quale post-it è aperto/attivo nel modal: 'main' oppure un id di tempList.
-var activePostit = 'main';
+// ====== TASK (pannello multi-lista, sostituisce il vecchio post-it unico) ======
+// liste: [{id,name,color}]; task per lista caricate on-demand in tasksByList[listId].
+var taskLists = [];
+var tasksByList = {};
+var activeListId = null;
 
-function _loadPostit(){
-  try{ var p=JSON.parse(localStorage.getItem('ql_postit')||'null'); if(p&&p.items){ postit=p; } }catch(e){}
-  if(!postit.color) postit.color=POSTIT_COLORS[0];
-  document.documentElement.style.setProperty('--postit', postit.color);
-  try{ var t=JSON.parse(localStorage.getItem('ql_templists')||'null'); if(t&&t.length) tempLists=t; }catch(e){}
-  _renderTabs();
-}
-function _savePostitLocal(){ try{ localStorage.setItem('ql_postit', JSON.stringify(postit)); }catch(e){} }
-function _saveTempLocal(){ try{ localStorage.setItem('ql_templists', JSON.stringify(tempLists)); }catch(e){} }
-function _pushNote(){ apiPost({ action:'setNote', note:postit }).catch(function(e){ console.warn('note bg:',e.message); }); }
-
-// ritorna l'oggetto-lista attivo (main o temp). main ha .color, temp no.
-function _active(){
-  if(activePostit==='main') return postit;
-  return tempLists.filter(function(l){ return l.id===activePostit; })[0] || postit;
-}
-function _isTemp(){ return activePostit!=='main'; }
-// persiste la lista attiva (sul backend solo se è il main)
-function _persistActive(){
-  if(_isTemp()){ _saveTempLocal(); }
-  else { _savePostitLocal(); _pushNote(); }
+function _loadTaskLists(){
+  apiGet({ action:'getTaskLists' }).then(function(lists){
+    taskLists = lists||[];
+    if(!activeListId && taskLists.length) activeListId = taskLists[0].id;
+    _renderListTabs();
+  }).catch(function(e){ console.warn('taskLists bg:',e.message); });
 }
 
-function openPostit(){
-  activePostit='main';
-  _openActive();
-  // versione fresca del main dal server in bg (ridisegna solo se cambiata e ancora sul main)
-  var before=JSON.stringify(postit);
-  apiGet({ action:'getNote' }).then(function(d){
-    if(d&&d.items){ postit={ color:d.color||postit.color, items:d.items }; _savePostitLocal();
-      if(JSON.stringify(postit)!==before && activePostit==='main' && !document.getElementById('postit-modal').classList.contains('hidden')){
-        document.documentElement.style.setProperty('--postit', postit.color); renderPostit();
-      }
-    }
-  }).catch(function(){});
-}
-// apre il temp post-it con un dato id
-function openTemp(id){ activePostit=id; _openActive(); }
-// apre il modal sul post-it attivo (main o temp), impostando aspetto e contenuto
-function _openActive(){
-  var modal=document.getElementById('postit-modal');
-  var box=document.getElementById('postit');
-  box.classList.remove('burning');   // pulizia difensiva se un burn è stato interrotto
-  if(_isTemp()){
-    box.classList.add('temp');
-    document.getElementById('postit-colors').innerHTML='';   // i temp non hanno colori
-  } else {
-    box.classList.remove('temp');
-    document.documentElement.style.setProperty('--postit', postit.color);
-    document.getElementById('postit-colors').innerHTML = POSTIT_COLORS.map(function(c){
-      return '<button style="background:'+c+'" onclick="setPostitColor(\''+c+'\')"></button>';
-    }).join('');
-  }
-  renderPostit();
+function openTasks(){
+  if(!activeListId && taskLists.length) activeListId = taskLists[0].id;
+  var modal=document.getElementById('tasks-modal');
   modal.classList.remove('hidden');
-  setTimeout(function(){ document.getElementById('postit-input').focus(); }, 80);
+  _renderListTabs();
+  if(activeListId) openTaskList(activeListId);
+  else renderTasksEmpty();
+  setTimeout(function(){ document.getElementById('tasks-input').focus(); }, 80);
 }
-function closePostit(){
-  // un temp ancora vuoto sarebbe inutile, ma lo conserviamo (può riaprirlo dal tab)
-  document.getElementById('postit-modal').classList.add('hidden');
-  activePostit='main';
+function closeTasks(){ document.getElementById('tasks-modal').classList.add('hidden'); }
+
+function openTaskList(listId){
+  activeListId = listId;
+  _renderListTabs();
+  document.documentElement.style.setProperty('--postit', _listColor(listId));
+  if(tasksByList[listId]) renderTaskItems();
+  else {
+    _setHTML(document.getElementById('tasks-list'), '<div style="opacity:.45;font-style:italic;padding:10px 2px">Carico…</div>');
+    apiGet({ action:'getTasks', listId:listId }).then(function(items){
+      tasksByList[listId]=items||[];
+      if(activeListId===listId) renderTaskItems();
+    }).catch(function(e){ console.warn('getTasks bg:',e.message); });
+  }
 }
-function setPostitColor(c){ postit.color=c; document.documentElement.style.setProperty('--postit',c); _savePostitLocal(); _pushNote(); }
+function _listColor(listId){ var l=taskLists.filter(function(x){return x.id===listId;})[0]; return (l&&l.color)||POSTIT_COLORS[0]; }
+
+function renderTasksEmpty(){
+  _setHTML(document.getElementById('tasks-list'), '<div style="opacity:.45;font-style:italic;padding:10px 2px">Crea una lista col tab "+" qui sopra.</div>');
+}
+
+// ---- cartelline (tab delle liste) ----
+function _renderListTabs(){
+  var wrap=document.getElementById('tasks-tabs'); if(!wrap) return;
+  var html = taskLists.map(function(l){
+    var sel = l.id===activeListId ? ' sel' : '';
+    return '<button type="button" class="tasks-tab'+sel+'" style="background:'+l.color+'" onclick="openTaskList(\''+l.id+'\')"'
+      + (sel?' oncontextmenu="return _taskListLongPress(\''+l.id+'\')"':'') + '>'+_esc(l.name)+'</button>';
+  }).join('') + '<button type="button" class="tasks-tab tasks-tab-add" onclick="promptNewTaskList()">+</button>';
+  wrap.innerHTML = html;
+  // long-press (touch) sulla cartellina attiva per eliminarla
+  Array.prototype.forEach.call(wrap.querySelectorAll('.tasks-tab.sel'), function(el){
+    var timer=null;
+    el.addEventListener('touchstart', function(){ timer=setTimeout(function(){ confirmDeleteTaskList(activeListId); }, 550); }, {passive:true});
+    el.addEventListener('touchend', function(){ clearTimeout(timer); }, {passive:true});
+    el.addEventListener('touchmove', function(){ clearTimeout(timer); }, {passive:true});
+  });
+}
+function _taskListLongPress(id){ confirmDeleteTaskList(id); return false; }   // right-click desktop
+
+function promptNewTaskList(){
+  var name = prompt('Nome della nuova lista:'); if(!name || !name.trim()) return;
+  var color = POSTIT_COLORS[taskLists.length % POSTIT_COLORS.length];
+  apiPost({ action:'createTaskList', name:name.trim(), color:color }).then(function(list){
+    taskLists.push(list); tasksByList[list.id]=[];
+    openTaskList(list.id);
+  }).catch(function(e){ alert('Errore creazione lista: '+e.message); });
+}
+function confirmDeleteTaskList(id){
+  var l=taskLists.filter(function(x){return x.id===id;})[0]; if(!l) return;
+  var n=(tasksByList[id]||[]).length;
+  if(!confirm('Eliminare "'+l.name+'" e le sue '+n+' task?')) return;
+  apiPost({ action:'deleteTaskList', id:id }).then(function(){
+    taskLists = taskLists.filter(function(x){ return x.id!==id; });
+    delete tasksByList[id];
+    activeListId = taskLists[0] ? taskLists[0].id : null;
+    _renderListTabs();
+    if(activeListId) openTaskList(activeListId); else renderTasksEmpty();
+  }).catch(function(e){ alert('Errore eliminazione lista: '+e.message); });
+}
 
 // ordina: prima i non fatti, poi i fatti (in fondo, come traccia)
-function _piOrdered(){
-  var items=_active().items;
+function _tasksOrdered(listId){
+  var items=tasksByList[listId]||[];
   var todo=items.filter(function(i){return !i.done;});
   var done=items.filter(function(i){return i.done;});
   return todo.concat(done);
 }
-function renderPostit(){
-  var list=document.getElementById('postit-list');
-  var items=_active().items;
+function renderTaskItems(){
+  var list=document.getElementById('tasks-list');
+  var items=tasksByList[activeListId]||[];
   if(!items.length){
-    var hint=_isTemp() ? 'Lista al volo. Scrivi sopra e premi invio.' : 'Niente ancora. Scrivi sopra e premi invio.';
-    _setHTML(list,'<div style="opacity:.45;font-style:italic;padding:10px 2px">'+hint+'</div>'); return;
+    _setHTML(list,'<div style="opacity:.45;font-style:italic;padding:10px 2px">Niente ancora. Scrivi sopra e premi invio.</div>'); return;
   }
-  var html = _piOrdered().map(function(it){
+  var html = _tasksOrdered(activeListId).map(function(it){
+    var due = it.due ? '<span class="pi-due">📅 '+it.due.slice(8,10)+'/'+it.due.slice(5,7)+(it.time?' '+it.time:'')+'</span>' : '';
     return '<div class="pi-item'+(it.done?' done':'')+'" data-id="'+it.id+'">'
       +'<span class="pi-check" data-act="toggle"></span>'
-      +'<span class="pi-text" data-act="tap">'+_esc(it.text)+'</span>'
+      +'<span class="pi-text" data-act="tap">'+_esc(it.text)+due+'</span>'
       +'<span class="pi-del">🗑</span></div>';
   }).join('');
   if(!_setHTML(list, html)) return;   // identico: niente flash
-  Array.prototype.forEach.call(list.querySelectorAll('.pi-item'), _wirePiItem);
+  Array.prototype.forEach.call(list.querySelectorAll('.pi-item'), _wireTaskItem);
 }
-function addPostitItem(text){
+function addTaskItem(listId, text){
   text=text.trim(); if(!text) return;
-  _active().items.unshift({ id:'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), text:text, done:false });
-  _persistActive(); renderPostit(); _renderTabs();
+  apiPost({ action:'setTask', rec:{ listId:listId, text:text } }).then(function(saved){
+    if(!tasksByList[listId]) tasksByList[listId]=[];
+    tasksByList[listId].unshift(saved);
+    if(activeListId===listId) renderTaskItems();
+  }).catch(function(e){ alert('Errore creazione task: '+e.message); });
 }
-document.getElementById('postit-input').addEventListener('keydown', function(e){
-  if(e.key==='Enter'){ e.preventDefault(); addPostitItem(this.value); this.value=''; }
+document.getElementById('tasks-input').addEventListener('keydown', function(e){
+  if(e.key==='Enter' && activeListId){ e.preventDefault(); addTaskItem(activeListId, this.value); this.value=''; }
 });
 
-// Il post-it BTN (note-btn): TAP singolo apre il main, DOPPIO TAP crea una lista al volo.
-// Niente swipe (le gesture laterali del telefono lo intercetterebbero).
-(function(){
-  var btn=document.getElementById('note-btn');
-  if(!btn) return;
-  btn.removeAttribute('onclick');   // gestiamo noi tap vs doppio-tap
-  var lastTap=0, timer=null;
-  function single(){ openPostit(); }
-  function double(){ if(!_createTemp()){ btn.classList.add('shake'); setTimeout(function(){ btn.classList.remove('shake'); },350); } }
-  btn.addEventListener('click', function(){
-    var now=Date.now();
-    if(now-lastTap < 320){ clearTimeout(timer); timer=null; lastTap=0; double(); }
-    else { lastTap=now; clearTimeout(timer); timer=setTimeout(function(){ timer=null; single(); }, 320); }
-  });
-})();
+function _taskFind(id){ return (tasksByList[activeListId]||[]).filter(function(i){return i.id===id;})[0]; }
+function _taskReplace(listId, saved){
+  var arr=tasksByList[listId]||[];
+  var i=arr.findIndex(function(x){return x.id===saved.id;});
+  if(i>=0) arr[i]=saved; else arr.unshift(saved);
+}
 
-// item: tap su check = toggle fatto; tap su testo = modal scelta; swipe sx = elimina (se fatto)
-function _wirePiItem(el){
+// item: tap su check = toggle fatto; tap su testo = modal scelta; swipe sx = elimina
+function _wireTaskItem(el){
   var id=el.getAttribute('data-id');
   el.addEventListener('click', function(ev){
     var act=ev.target.getAttribute('data-act');
-    if(act==='toggle') piToggle(id);
-    else if(act==='tap') piOpenChoice(id);
+    if(act==='toggle') taskToggle(id);
+    else if(act==='tap') taskOpenChoice(id);
   });
-  // swipe-to-delete (solo orizzontale)
   var x0=null,sw=false;
   el.addEventListener('touchstart', function(e){ x0=e.touches[0].clientX; sw=false; }, {passive:true});
   el.addEventListener('touchmove', function(e){
@@ -1023,91 +1058,93 @@ function _wirePiItem(el){
   }, {passive:true});
   el.addEventListener('touchend', function(e){
     if(sw){ var dx=e.changedTouches[0].clientX-x0;
-      if(dx<-60){ piDelete(id); return; }
+      if(dx<-60){ taskDelete(id); return; }
       el.style.transform=''; el.querySelector('.pi-del').style.opacity=0; }
     x0=null;
   }, {passive:true});
 }
-function _piFind(id){ return _active().items.filter(function(i){return i.id===id;})[0]; }
-function piToggle(id){
-  var it=_piFind(id); if(!it) return; it.done=!it.done; _persistActive(); renderPostit(); _renderTabs();
-  // temp list: se tutti gli item sono ora spuntati → si brucia e sparisce
-  if(_isTemp()){
-    var items=_active().items;
-    if(items.length && items.every(function(i){return i.done;})) _burnActiveTemp();
-  }
+function taskToggle(id){
+  var it=_taskFind(id); if(!it) return;
+  it.done=!it.done; renderTaskItems();   // UI subito
+  apiPost({ action:'toggleTaskDone', id:id }).then(function(saved){
+    if(saved){ _taskReplace(activeListId, saved); if(saved.due) delete taskDueCache[saved.due]; renderTaskItems(); }
+  }).catch(function(e){ console.warn('toggle task bg:',e.message); });
 }
-function piDelete(id){
-  var a=_active(); a.items=a.items.filter(function(i){return i.id!==id;});
-  _persistActive(); renderPostit(); _renderTabs();
+// spunta/apre dalla vista Giorno dell'agenda: la task può non essere nella lista attiva in memoria
+function toggleTaskDoneFromAgenda(id){
+  apiPost({ action:'toggleTaskDone', id:id }).then(function(saved){
+    if(saved){ _taskReplace(saved.listId, saved); if(saved.due) delete taskDueCache[saved.due]; render(); }
+  }).catch(function(e){ console.warn('toggle task bg:',e.message); });
+}
+function taskDelete(id){
+  var it=_taskFind(id); if(!it) return;
+  tasksByList[activeListId]=(tasksByList[activeListId]||[]).filter(function(i){return i.id!==id;});
+  renderTaskItems();
+  if(it.due) delete taskDueCache[it.due];
+  apiPost({ action:'deleteTask', id:id }).catch(function(e){ console.warn('delete task bg:',e.message); });
 }
 
-// ---- modal scelta su item ----
-var piChoiceId=null;
-function piOpenChoice(id){
-  var it=_piFind(id); if(!it) return;
-  piChoiceId=id;
-  document.getElementById('pi-choice-text').value=it.text;   // testo modificabile
+// ---- modal scelta su item (testo + scadenza opzionale data/ora) ----
+var taskChoiceId=null, taskChoiceListId=null;
+function taskOpenChoice(id){
+  var it=_taskFind(id); if(!it) return;
+  taskChoiceId=id; taskChoiceListId=activeListId;
+  _fillChoiceModal(it);
+}
+// apre il modal scelta per una task vista dall'agenda (non necessariamente nella lista attiva)
+function piOpenChoiceById(id){
+  apiGet({ action:'getTaskById', id:id }).then(function(it){
+    if(!it) return;
+    taskChoiceId=id; taskChoiceListId=it.listId;
+    _fillChoiceModal(it);
+  }).catch(function(e){ console.warn('piOpenChoiceById bg:',e.message); });
+}
+function _fillChoiceModal(it){
+  document.getElementById('pi-choice-text').value=it.text;
+  document.getElementById('pi-choice-due').value=it.due||'';
+  document.getElementById('pi-choice-time').value=it.time||'';
+  document.getElementById('pi-choice-time').parentElement.classList.toggle('hidden', !it.due);
   document.getElementById('pi-choice').classList.remove('hidden');
 }
-// salva nell'item il testo eventualmente modificato nell'input del modal
-function _piSyncText(){
-  var it=_piFind(piChoiceId); if(!it) return it;
-  var t=document.getElementById('pi-choice-text').value.trim();
-  if(t && t!==it.text){ it.text=t; _persistActive(); }
-  return it;
+document.getElementById('pi-choice-due').addEventListener('change', function(){
+  document.getElementById('pi-choice-time').parentElement.classList.toggle('hidden', !this.value);
+  if(!this.value) document.getElementById('pi-choice-time').value='';
+});
+// salva testo/scadenza eventualmente modificati; ritorna la task salvata (promise)
+function _taskSyncFields(){
+  var text=document.getElementById('pi-choice-text').value.trim();
+  var due=document.getElementById('pi-choice-due').value;
+  var time=due ? document.getElementById('pi-choice-time').value : '';
+  return apiPost({ action:'setTask', rec:{ id:taskChoiceId, listId:taskChoiceListId, text:text, due:due, time:time } });
 }
-function piCloseChoice(){ _piSyncText(); renderPostit(); _renderTabs(); document.getElementById('pi-choice').classList.add('hidden'); piChoiceId=null; }
+function piCloseChoice(){
+  _taskSyncFields().then(function(saved){
+    if(saved){ _taskReplace(taskChoiceListId, saved); if(activeListId===taskChoiceListId) renderTaskItems(); taskDueCache={}; render(); }
+  }).catch(function(e){ console.warn('save task choice bg:',e.message); });
+  document.getElementById('pi-choice').classList.add('hidden');
+  taskChoiceId=null; taskChoiceListId=null;
+}
 function piMarkDone(){
-  var it=_piSyncText(); document.getElementById('pi-choice').classList.add('hidden');
-  if(it){ it.done=true; _persistActive(); renderPostit(); _renderTabs();
-    if(_isTemp()){ var items=_active().items; if(items.length && items.every(function(i){return i.done;})) _burnActiveTemp(); }
-  }
-  piChoiceId=null;
+  var id=taskChoiceId, listId=taskChoiceListId;
+  _taskSyncFields().then(function(saved){
+    if(!saved || saved.done) return saved;   // già fatta (o appena creata fatta, impossibile): non invertire
+    return apiPost({ action:'toggleTaskDone', id:id });
+  }).then(function(saved){
+    if(saved){ _taskReplace(listId, saved); if(activeListId===listId) renderTaskItems(); if(saved.due) delete taskDueCache[saved.due]; render(); }
+  }).catch(function(e){ console.warn('mark done bg:',e.message); });
+  document.getElementById('pi-choice').classList.add('hidden');
+  taskChoiceId=null; taskChoiceListId=null;
 }
 function piToAgenda(){
-  var it=_piSyncText(); if(!it){ piCloseChoice(); return; }
-  var pendingId=it.id; var fromList=activePostit;
-  piCloseChoice(); closePostit();
-  // apre editor nuovo evento di OGGI col "cosa?" precompilato; l'item sparisce SOLO se salvo
+  var id=taskChoiceId, listId=taskChoiceListId;
+  var text=document.getElementById('pi-choice-text').value.trim();
+  document.getElementById('pi-choice').classList.add('hidden');
+  closeTasks();
+  // apre editor nuovo evento di OGGI col "cosa?" precompilato; la task sparisce SOLO se salvo
   openEditor();
   state.anchor=_todayISO();
-  document.getElementById('ed-title').value=it.text;
-  // memorizza quale item (e da quale lista) rimuovere dopo il salvataggio
-  state.fromPostitId=pendingId; state.fromPostitList=fromList;
-}
-
-// ---- liste usa-e-getta (temp) ----
-// Le linguette dei temp si impilano sopra .note-btn, una per lista, cliccabili.
-function _renderTabs(){
-  var wrap=document.getElementById('temp-tabs'); if(!wrap) return;
-  wrap.innerHTML = tempLists.map(function(l){
-    var n=l.items.filter(function(i){return !i.done;}).length;
-    return '<button class="temp-tab" onclick="openTemp(\''+l.id+'\')" title="Lista al volo">'
-      + (n? '<span class="temp-tab-n">'+n+'</span>' : '') + '</button>';
-  }).join('');
-}
-// crea una nuova lista usa-e-getta (se c'è spazio) e la apre
-function _createTemp(){
-  if(tempLists.length>=MAX_TEMP) return false;
-  var id='tl'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
-  tempLists.push({ id:id, items:[] });
-  _saveTempLocal(); _renderTabs();
-  openTemp(id);
-  return true;
-}
-// "brucia" il temp attivo: animazione bottom→top, poi rimozione e chiusura modal
-function _burnActiveTemp(){
-  var id=activePostit;
-  var box=document.getElementById('postit');
-  box.classList.add('burning');
-  setTimeout(function(){
-    tempLists=tempLists.filter(function(l){return l.id!==id;});
-    _saveTempLocal(); _renderTabs();
-    box.classList.remove('burning','temp');
-    document.getElementById('postit-modal').classList.add('hidden');
-    activePostit='main';
-  }, 1150);   // deve combaciare con la durata di @keyframes burn
+  document.getElementById('ed-title').value=text;
+  state.fromTaskId=id; state.fromTaskListId=listId;
 }
 
 // ====== TRACKING (report a fasce + voti) ======
@@ -1345,7 +1382,6 @@ var EMOTIONS = [
   { id:'sopraffatto', file:'sopraffatto.png', scaglione:'3-4' },
   { id:'ansia',       file:'ansia.png',       scaglione:'3-4' },
   { id:'preoccupato', file:'preoccupato.png', scaglione:'3-4' },
-  { id:'no', file:'no.png', scaglione:'3-4' },
   { id:'apatico',     file:'apatico.png',     scaglione:'5-6' },
   { id:'annoiato',    file:'annoiato.png',    scaglione:'5-6' },
   { id:'confuso',     file:'confuso.png',     scaglione:'5-6' },
@@ -1353,8 +1389,6 @@ var EMOTIONS = [
   { id:'distratto',   file:'distratto.png',   scaglione:'5-6' },
   { id:'svogliato',   file:'svogliato.png',   scaglione:'5-6' },
   { id:'pensieroso',  file:'pensieroso.png',  scaglione:'5-6' },
-  { id:'ok',  file:'ok.png',  scaglione:'5-6' },
-  { id:'nice',  file:'nice.png',  scaglione:'5-6' },
   { id:'sereno',      file:'sereno.png',      scaglione:'7-8' },
   { id:'soddisfatto', file:'soddisfatto.png', scaglione:'7-8' },
   { id:'fiducioso',   file:'fiducioso.png',   scaglione:'7-8' },
@@ -1369,9 +1403,6 @@ var EMOTIONS = [
   { id:'ispirato',    file:'ispirato.png',    scaglione:'9-10' },
   { id:'innamorato',  file:'innamorato.png',  scaglione:'9-10' },
   { id:'invincibile', file:'invinicbile.png', scaglione:'9-10' },
-  { id:'wtf',    file:'wtf.png',    scaglione:'trasversale' },
-  { id:'gametime',    file:'gametime.png',    scaglione:'trasversale' },
-  { id:'diy',    file:'diy.png',    scaglione:'trasversale' },
   { id:'nostalgico',      file:'nostalgico.png',      scaglione:'trasversale' },
   { id:'disagio',         file:'disagio.png',         scaglione:'trasversale' },
   { id:'bisogno-intimo',  file:'bisogno-intimo.png',  scaglione:'trasversale' },
