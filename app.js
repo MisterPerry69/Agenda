@@ -395,22 +395,28 @@ function renderDay(rows){
   body.ondblclick=function(ev){ if(!ev.target.closest('.ag-line')) openEditor(); };
   var tasksToday = taskDueCache[state.anchor];
   if(tasksToday===undefined) _ensureTasksLoaded(state.anchor);   // trigger async, si ridisegna da sola
-  var taskRows = (tasksToday||[]).map(function(t){
-    return { __isTask:true, id:t.id, date:t.due, time:t.time, title:t.text, done:t.done, category:'' };
+  var taskList = (tasksToday||[]).slice().sort(function(a,b){
+    return ((a.time||'99:99')<(b.time||'99:99'))?-1:1;
   });
-  var allRows = rows.concat(taskRows).sort(function(a,b){ return _sortKey(a)<_sortKey(b)?-1:1; });
-  if(!allRows.length){ _setHTML(body,'<div class="ag-empty">Niente per oggi.<br>Doppio tap per aggiungere.</div>'); return; }
-  var html = allRows.map(function(e){
-    if(e.__isTask){
-      var tlbl = e.time ? e.time : 'task';
-      var timeColT = '<span class="ag-time'+(e.time?'':' ag-todo')+'" data-act="taskedit">'+tlbl+'</span>';
-      return '<div class="ag-line'+(e.done?' done':'')+' is-todo" data-id="'+e.id+'" data-task="1">'
-        +'<span class="ag-check'+(e.done?' done':'')+'" data-act="taskcheck"></span>'
-        +timeColT
-        +'<span class="ag-txt" data-act="taskedit">'+_esc(e.title)+'</span>'
-        +'<span class="ag-tag tag-unknown" data-act="taskedit"><span>📋 TASK</span></span>'
+  var allRows = rows.slice().sort(function(a,b){ return _sortKey(a)<_sortKey(b)?-1:1; });
+  if(!allRows.length && !taskList.length){ _setHTML(body,'<div class="ag-empty">Niente per oggi.<br>Doppio tap per aggiungere.</div>'); return; }
+
+  // Le task stanno in un BLOCCO PROPRIO in cima, staccate dagli eventi: sono
+  // cose da fare, non appuntamenti, e mescolarle toglieva il colpo d'occhio.
+  var html='';
+  if(taskList.length){
+    html += '<div class="ag-tasks">' + taskList.map(function(t){
+      var badge=_taskListBadge(t);
+      var when = t.time ? '<span class="agt-time">'+t.time+'</span>' : '';
+      return '<div class="agt-row'+(t.done?' done':'')+'" data-id="'+t.id+'" data-task="1">'
+        +'<span class="agt-check'+(t.done?' done':'')+'" data-act="taskcheck"></span>'
+        +'<span class="agt-txt" data-act="taskedit">'+_esc(t.text)+'</span>'
+        +when+badge
         +'</div>';
-    }
+    }).join('') + '</div>';
+  }
+
+  html += allRows.map(function(e){
     var pin=e.onGoogle?'<span class="ag-pin">📌</span>':'';
     var todo=_isTodoEntry(e);
     var lbl=_dayTimeLabel(e, state.anchor);
@@ -430,16 +436,27 @@ function renderDay(rows){
   if(!_setHTML(body, html)) return;   // identico: niente flash, handler già a posto
   Array.prototype.forEach.call(body.querySelectorAll('.ag-line'), function(line){
     var id=line.getAttribute('data-id');
-    var isTask=line.getAttribute('data-task')==='1';
     line.addEventListener('click', function(ev){
       var act=(ev.target.getAttribute('data-act'))||(ev.target.parentElement&&ev.target.parentElement.getAttribute('data-act'));
-      if(isTask){
-        if(act==='taskcheck') toggleTaskDoneFromAgenda(id); else if(act==='taskedit') piOpenChoiceById(id);
-        return;
-      }
       if(act==='check') toggleDone(id); else if(act==='edit') openEditor(id);
     });
   });
+  Array.prototype.forEach.call(body.querySelectorAll('.agt-row'), function(row){
+    var id=row.getAttribute('data-id');
+    row.addEventListener('click', function(ev){
+      var act=ev.target.getAttribute('data-act');
+      if(act==='taskcheck') toggleTaskDoneFromAgenda(id); else piOpenChoiceById(id);
+    });
+  });
+}
+
+// pastiglia con la lista di appartenenza di una task mostrata in agenda:
+// per una speciale è la lista a cui è assegnata, altrimenti la sua lista.
+function _taskListBadge(t){
+  var listId = (t.listId===SPECIAL_LIST_ID && t.category) ? t.category : t.listId;
+  var l=taskLists.filter(function(x){ return x.id===listId; })[0];
+  if(!l) return '<span class="agt-badge agt-badge-special">✦</span>';
+  return '<span class="agt-badge" style="background:'+l.color+'">'+_esc(l.name)+'</span>';
 }
 
 function _byDay(rows){ var m={}; rows.forEach(function(e){ (m[e.date]=m[e.date]||[]).push(e); }); return m; }
@@ -966,13 +983,21 @@ function openTaskList(listId){
   document.documentElement.style.setProperty('--postit', _listColor(listId));
   renderTaskItems();   // subito dalla cache (anche vuota): mai schermata d'attesa
   apiGet({ action:'getTasks', listId:listId }).then(function(items){
-    // conserva le righe appena create e non ancora confermate dal server,
-    // altrimenti una task scritta un attimo prima sparirebbe dalla lista
-    var pending=(tasksByList[listId]||[]).filter(function(t){ return t.id.indexOf('tmp_')===0; });
-    tasksByList[listId]=pending.concat(items||[]);
+    tasksByList[listId]=_mergeTasks(tasksByList[listId], items||[]);
     _saveTasksCache();
     if(activeListId===listId) renderTaskItems();
   }).catch(function(e){ console.warn('getTasks bg:',e.message); });
+}
+// Unisce la lista del server con quella locale. Tiene le righe appena create e
+// non ancora confermate (tmp_), ma solo se il server non ne mostra già una
+// equivalente: altrimenti la stessa task comparirebbe due volte.
+function _mergeTasks(local, fromServer){
+  var serverTexts={};
+  fromServer.forEach(function(t){ serverTexts[t.text+'|'+(t.due||'')]=true; });
+  var pending=(local||[]).filter(function(t){
+    return t.id.indexOf('tmp_')===0 && !serverTexts[t.text+'|'+(t.due||'')];
+  });
+  return pending.concat(fromServer);
 }
 function _listColor(listId){
   if(_isSpecialList(listId)) return POSTIT_COLORS[0];
