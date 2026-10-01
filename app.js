@@ -983,12 +983,13 @@ function renderTasksEmpty(){
 // La prima tab (✦) è la lista SPECIALI: esiste sempre, non si elimina, e le
 // sue task portano una categoria dell'agenda. Le altre sono liste libere.
 var SPECIAL_LIST_ID = '__special__';
+var SPECIAL_COLOR = POSTIT_COLORS[0];   // la sua tab è dello stesso colore della sua pagina
 function _isSpecialList(id){ return id===SPECIAL_LIST_ID; }
 
 function _renderListTabs(){
   var wrap=document.getElementById('tasks-tabs'); if(!wrap) return;
   var selSpecial = _isSpecialList(activeListId) ? ' sel' : '';
-  var html = '<button type="button" class="tasks-tab tasks-tab-special'+selSpecial+'" onclick="openTaskList(\''+SPECIAL_LIST_ID+'\')" title="Speciali">✦</button>';
+  var html = '<button type="button" class="tasks-tab tasks-tab-special'+selSpecial+'" style="background:'+SPECIAL_COLOR+'" onclick="openTaskList(\''+SPECIAL_LIST_ID+'\')" title="Speciali">✦</button>';
   html += taskLists.map(function(l){
     var sel = l.id===activeListId ? ' sel' : '';
     return '<button type="button" class="tasks-tab'+sel+'" style="background:'+l.color+'" onclick="openTaskList(\''+l.id+'\')"'
@@ -1118,47 +1119,67 @@ function addTaskItem(listId, rec){
   }).catch(function(e){ console.warn('add task bg:',e.message); });
 }
 
-// ---- modal "aggiungi attività" ----
-var _tfCat='work';
-function openTaskForm(){
-  if(!activeListId){ openNewList(); return; }
-  document.getElementById('tf-title').value='';
-  document.getElementById('tf-detail').value='';
-  document.getElementById('tf-due').value='';
-  document.getElementById('tf-time').value='';
-  document.getElementById('tf-time-wrap').classList.add('hidden');
-  document.getElementById('tf-remind').checked=false;
-  document.getElementById('tf-remind-row').classList.add('hidden');
+// ---- inserimento INLINE (niente popup: il campo vive dentro la lista) ----
+var _tnCat='work';
+function tnOpen(){
+  document.getElementById('tn-title').value='';
+  document.getElementById('tn-detail').value='';
+  document.getElementById('tn-detail').classList.add('hidden');
+  document.getElementById('tn-due').value='';
+  document.getElementById('tn-time').value='';
+  document.getElementById('tn-time').classList.add('hidden');
+  document.getElementById('tn-remind').checked=false;
+  document.getElementById('tn-remind-row').classList.add('hidden');
+  document.getElementById('tn-due-row').classList.add('hidden');
   var special=_isSpecialList(activeListId);
-  document.getElementById('tf-cats-row').classList.toggle('hidden', !special);
-  if(special){ _tfCat='work'; _renderTfCats(); }
-  document.getElementById('taskform-modal').classList.remove('hidden');
-  setTimeout(function(){ document.getElementById('tf-title').focus(); }, 80);
+  document.getElementById('tn-cats').classList.toggle('hidden', !special);
+  if(special){ _tnCat='work'; _renderTnCats(); }
+  document.getElementById('tasks-new').classList.remove('hidden');
+  document.getElementById('tasks-add-btn').classList.add('hidden');
+  setTimeout(function(){ document.getElementById('tn-title').focus(); }, 60);
 }
-function closeTaskForm(){ document.getElementById('taskform-modal').classList.add('hidden'); }
-function _renderTfCats(){
-  document.getElementById('tf-cats').innerHTML = CATS.map(function(c){
-    return '<button type="button" class="ed-cat tag-'+c.key+(c.key===_tfCat?' sel':'')+'" onclick="_pickTfCat(\''+c.key+'\')"><span>'+c.emoji+'</span></button>';
+function tnClose(){
+  document.getElementById('tasks-new').classList.add('hidden');
+  document.getElementById('tasks-add-btn').classList.remove('hidden');
+}
+function tnToggleDetail(){
+  var el=document.getElementById('tn-detail');
+  el.classList.toggle('hidden');
+  if(!el.classList.contains('hidden')) el.focus();
+}
+function tnToggleDue(){
+  var row=document.getElementById('tn-due-row');
+  var show=row.classList.contains('hidden');
+  row.classList.toggle('hidden', !show);
+  if(!show){ document.getElementById('tn-due').value=''; document.getElementById('tn-time').value=''; }
+}
+function _renderTnCats(){
+  document.getElementById('tn-cats').innerHTML = CATS.map(function(c){
+    return '<button type="button" class="ed-cat tag-'+c.key+(c.key===_tnCat?' sel':'')+'" onclick="_pickTnCat(\''+c.key+'\')"><span>'+c.emoji+'</span></button>';
   }).join('');
 }
-function _pickTfCat(k){ _tfCat=k; _renderTfCats(); }
-// l'ora e il promemoria hanno senso solo con una scadenza
-document.getElementById('tf-due').addEventListener('change', function(){
+function _pickTnCat(k){ _tnCat=k; _renderTnCats(); }
+// ora e promemoria compaiono solo quando c'è una data
+document.getElementById('tn-due').addEventListener('change', function(){
   var has=!!this.value;
-  document.getElementById('tf-time-wrap').classList.toggle('hidden', !has);
-  document.getElementById('tf-remind-row').classList.toggle('hidden', !has);
-  if(!has){ document.getElementById('tf-time').value=''; document.getElementById('tf-remind').checked=false; }
+  document.getElementById('tn-time').classList.toggle('hidden', !has);
+  document.getElementById('tn-remind-row').classList.toggle('hidden', !has);
+  if(!has){ document.getElementById('tn-time').value=''; document.getElementById('tn-remind').checked=false; }
 });
-function taskFormSave(){
-  var title=document.getElementById('tf-title').value.trim();
-  if(!title) return;
-  var due=document.getElementById('tf-due').value;
-  var rec={ text:title, detail:document.getElementById('tf-detail').value.trim(),
-    due:due, time:due?document.getElementById('tf-time').value:'',
-    remind:due?document.getElementById('tf-remind').checked:false };
-  if(_isSpecialList(activeListId)) rec.category=_tfCat;
-  closeTaskForm();
-  addTaskItem(activeListId, rec);
+document.getElementById('tn-title').addEventListener('keydown', function(e){
+  if(e.key==='Enter'){ e.preventDefault(); tnSave(); }
+});
+function tnSave(){
+  var title=document.getElementById('tn-title').value.trim();
+  if(!title){ tnClose(); return; }
+  var due=document.getElementById('tn-due').value;
+  var rec={ text:title, detail:document.getElementById('tn-detail').value.trim(),
+    due:due, time:due?document.getElementById('tn-time').value:'',
+    remind:due?document.getElementById('tn-remind').checked:false };
+  if(_isSpecialList(activeListId)) rec.category=_tnCat;
+  var listId=activeListId;
+  tnClose();
+  addTaskItem(listId, rec);
 }
 
 function _taskFind(id){ return (tasksByList[activeListId]||[]).filter(function(i){return i.id===id;})[0]; }

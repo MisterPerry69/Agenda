@@ -294,12 +294,14 @@ body{
 .plan-empty{ text-align:center; color:var(--ink-soft); font-style:italic; padding:20px; }
 
 /* ===================== MODAL TASK (ex post-it, ora multi-lista) ===================== */
-.postit-modal{ position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
-  background:rgba(20,18,16,.55); padding:18px; animation:riseIn .18s ease; }
+/* ancorato in alto (come gli altri modal): niente salti con la tastiera aperta */
+.postit-modal{ position:fixed; inset:0; z-index:30; display:flex; align-items:flex-start; justify-content:center;
+  background:rgba(20,18,16,.55); padding:18px; padding-top:13vh; animation:riseIn .18s ease; }
 .postit{
+  position:relative;
   width:100%; max-width:360px; height:70vh; background:var(--postit, var(--hl-pink));
-  border-radius:3px; box-shadow:0 16px 40px rgba(0,0,0,.4);
-  display:flex; flex-direction:column; padding:18px; animation:popIn .26s ease;
+  border-radius:4px; box-shadow:0 16px 40px rgba(0,0,0,.4);
+  display:flex; flex-direction:column; padding:14px 16px 16px; animation:popIn .26s ease;
 }
 .postit-top{ display:flex; align-items:center; justify-content:flex-end; margin-bottom:6px; }
 .postit-close{ background:none; border:none; font-family:'Patrick Hand',cursive; font-size:24px; cursor:pointer; color:var(--ink); }
@@ -323,31 +325,59 @@ body{
 .pi-item .pi-del{ position:absolute; right:8px; top:50%; transform:translateY(-50%); color:var(--red); font-size:18px; opacity:0; transition:opacity .15s; }
 .pi-item.swiping{ transition:transform .15s; }
 
-/* ---- cartelline (tab delle liste): una riga sola, scorrevole se sono tante ---- */
+/* ---- cartelline (tab delle liste): linguette piene appoggiate SOPRA il foglio,
+   su una riga sola, scorrevole se sono tante ---- */
 .tasks-tabs{
-  display:flex; gap:3px; margin:-18px -18px 8px; padding:8px 12px 0;
+  position:absolute; left:0; right:0; bottom:100%;
+  display:flex; gap:4px; padding:0 4px;
   flex-wrap:nowrap; overflow-x:auto; overscroll-behavior-x:contain;
   scrollbar-width:none;
 }
 .tasks-tabs::-webkit-scrollbar{ display:none; }
 .tasks-tab{
-  flex:0 1 auto; min-width:0; max-width:92px;
-  font-family:'Patrick Hand',cursive; font-weight:700; font-size:13px; color:var(--ink);
-  border:none; border-radius:9px 9px 0 0; padding:7px 10px; cursor:pointer;
+  flex:0 1 auto; min-width:0; max-width:104px;
+  font-family:'Patrick Hand',cursive; font-size:17px; color:var(--ink);
+  border:none; border-radius:10px 10px 0 0; padding:9px 14px; cursor:pointer;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  opacity:.55; transform:translateY(3px); transition:opacity .12s, transform .12s;
 }
-.tasks-tab.sel{ opacity:1; transform:none; box-shadow:0 -2px 6px rgba(0,0,0,.18); }
-.tasks-tab-special{ flex:0 0 auto; background:#fff8c4; font-size:15px; padding:7px 11px; }
-.tasks-tab-add{ flex:0 0 auto; background:rgba(255,255,255,.55); font-weight:900; padding:7px 11px; }
+.tasks-tab:active{ filter:brightness(.96); }
+/* la tab della lista aperta è la stessa carta del foglio: stesso colore, attaccata */
+.tasks-tab.sel{ background:var(--postit, var(--hl-pink)) !important; }
+.tasks-tab-special{ flex:0 0 auto; padding:9px 12px; }
+.tasks-tab-add{ flex:0 0 auto; padding:9px 13px; background:rgba(255,255,255,.55); }
 
-/* bottone che apre il form attività (sostituisce il vecchio campo di testo) */
+/* bottone che apre l'inserimento inline */
 .tasks-add-btn{
-  flex-shrink:0; width:100%; font-family:'Patrick Hand',cursive; font-size:16px; cursor:pointer;
-  padding:10px; margin-bottom:10px; border-radius:10px;
-  border:2px dashed rgba(0,0,0,.35); background:rgba(255,255,255,.35); color:var(--ink);
+  flex-shrink:0; align-self:flex-start; font-family:'Patrick Hand',cursive; font-size:17px;
+  cursor:pointer; padding:8px 4px; border:none; background:transparent; color:var(--ink); opacity:.75;
 }
-.tasks-add-btn:active{ transform:translateY(1px); }
+.tasks-add-btn:active{ opacity:1; }
+
+/* ---- inserimento inline (stile Google Tasks) ---- */
+.tasks-new{ flex-shrink:0; border-top:1px solid rgba(0,0,0,.18); padding-top:10px; margin-top:4px; }
+.tasks-new-title{
+  width:100%; border:none; background:transparent; outline:none;
+  font-family:'Patrick Hand',cursive; font-size:19px; color:var(--ink); padding:4px 2px;
+}
+.tasks-new-title::placeholder{ color:rgba(0,0,0,.4); }
+.tasks-new-detail{
+  width:100%; min-height:48px; border:none; background:transparent; outline:none; resize:vertical;
+  font-family:'Patrick Hand',cursive; font-size:15px; color:var(--ink); padding:4px 2px;
+}
+.tasks-new-detail::placeholder{ color:rgba(0,0,0,.4); }
+.tasks-new-due{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 2px; }
+.tasks-new-due input[type=date], .tasks-new-due input[type=time]{
+  font-family:'Patrick Hand',cursive; font-size:15px; color:var(--ink);
+  background:rgba(255,255,255,.45); border:none; border-radius:8px; padding:5px 8px;
+}
+.tasks-new-remind{ display:flex; align-items:center; gap:4px; font-size:15px; cursor:pointer; }
+.tasks-new-remind input{ width:17px; height:17px; accent-color:var(--ink); }
+.tasks-new-cats{ display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 2px; }
+.tasks-new-bar{ display:flex; align-items:center; gap:10px; margin-top:6px; }
+.tn-icon{ font-size:17px; line-height:1; border:none; background:transparent; cursor:pointer; padding:4px 2px; opacity:.7; }
+.tn-icon:active{ opacity:1; }
+.tn-save{ margin-left:auto; font-family:'Patrick Hand',cursive; font-size:16px; cursor:pointer;
+  border:none; background:transparent; color:var(--ink); font-weight:700; padding:4px 6px; }
 
 /* dettaglio e categoria dentro la riga task */
 .pi-detail{ display:block; font-size:13px; color:var(--ink-soft); margin-top:1px; }
@@ -369,23 +399,16 @@ body{
   border:3px solid transparent; box-shadow:0 1px 3px rgba(0,0,0,.25); }
 .newlist-color.sel{ border-color:var(--ink); }
 
-/* modal attività */
-.tf-detail{ width:100%; min-height:62px; font-family:'Patrick Hand',cursive; font-size:16px; color:var(--ink);
-  background:transparent; border:2px solid #d8d2c0; border-radius:10px; padding:8px; margin-bottom:10px; resize:vertical; }
-.tf-detail:focus{ outline:none; border-color:var(--ink); }
-.tf-remind{ display:flex; gap:8px; align-items:center; justify-content:center;
-  font-family:'Patrick Hand',cursive; font-size:15px; color:var(--ink); cursor:pointer; margin-bottom:14px; }
-.tf-remind input{ width:18px; height:18px; accent-color:var(--ink); }
-.tf-cats-label{ font-family:'Patrick Hand',cursive; font-size:12px; color:var(--ink-soft);
-  text-transform:uppercase; letter-spacing:.5px; text-align:center; margin-bottom:4px; }
 
 /* feedback "max raggiunto" sul note-btn (riuso per eventuali limiti futuri) */
 .note-btn.shake{ animation:nbShake .35s ease; }
 @keyframes nbShake{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
 
-/* modal scelta su una task (testo + scadenza opzionale) */
-.pi-choice{ position:fixed; inset:0; z-index:35; display:flex; align-items:flex-end; justify-content:center;
-  background:rgba(20,18,16,.5); padding:18px; animation:riseIn .15s ease; }
+/* modal scelta su una task (testo + scadenza opzionale).
+   Ancorato in ALTO, non in fondo: con la tastiera aperta un popup appoggiato al
+   bordo inferiore saltava su e giù ad ogni focus. */
+.pi-choice{ position:fixed; inset:0; z-index:35; display:flex; align-items:flex-start; justify-content:center;
+  background:rgba(20,18,16,.5); padding:18px; padding-top:8vh; animation:riseIn .15s ease; }
 .pi-choice-card{ width:100%; max-width:360px; background:var(--paper); border-radius:18px; padding:18px;
   box-shadow:0 16px 40px rgba(0,0,0,.4); animation:popIn .22s ease;
   background-image:radial-gradient(var(--dot) 1.0px,transparent 1.3px); background-size:19px 19px; }
